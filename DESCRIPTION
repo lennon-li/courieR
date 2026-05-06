@@ -1,0 +1,37 @@
+Package: packport
+Type: Package
+Title: Cross-Platform R Package Migration Workbench
+Version: 0.1.0
+Authors@R: 
+    person("Jane", "Doe", , "jane@example.com", role = c("aut", "cre"))
+Description: A cross-platform R package migration workbench.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0
+Config/testthat/edition: 3
+Imports:
+    processx (>= 3.8.0),
+    callr (>= 3.7.0),
+    pak (>= 0.7.0),
+    jsonlite (>= 1.8.0),
+    desc (>= 1.4.0),
+    fs (>= 1.6.0),
+    cli (>= 3.6.0),
+    data.table (>= 1.14.0),
+    shiny (>= 1.8.0),
+    bslib (>= 0.7.0),
+    bsicons (>= 0.1.2),
+    DT (>= 0.31),
+    renv (>= 1.0.0),
+    stringr (>= 1.5.0),
+    yaml (>= 2.3.0),
+    xml2 (>= 1.3.0),
+    rmarkdown (>= 2.26)
+Suggests:
+    testthat (>= 3.0.0),
+    withr (>= 3.0.0),
+    mockery (>= 0.4.4),
+    devtools (>= 2.4.0),
+    shinyFiles (>= 0.9.3),
+    BiocManager (>= 1.30.0)
