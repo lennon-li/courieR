@@ -1,4 +1,4 @@
-# Internal utility functions for packport
+# Internal utility functions for courieR
 
 #' Create a standardized status list
 #'
@@ -7,15 +7,15 @@
 #' @param ... Additional fields
 #' @return A named list
 #' @noRd
-status_result <- function(status, message = NULL, ...) {
+receipt <- function(status, message = NULL, ...) {
   c(list(status = status, message = message), list(...))
 }
 
-#' Get path to migration directory
+#' Get path to courier depot directory
 #'
 #' @param project_path Path to the R project
 #' @return Path object
 #' @noRd
-migration_dir_path <- function(project_path) {
-  fs::path(project_path, ".migration-dashboard")
+depot_path <- function(project_path) {
+  fs::path(project_path, ".courier-depot")
 }

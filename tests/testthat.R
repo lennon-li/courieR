@@ -1,4 +1,4 @@
 library(testthat)
-library(packport)
+library(courieR)
 
-test_check("packport")
+test_check("courieR")

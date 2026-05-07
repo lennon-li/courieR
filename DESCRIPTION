@@ -1,10 +1,10 @@
-Package: packport
+Package: courieR
 Type: Package
-Title: Cross-Platform R Package Migration Workbench
+Title: R Package Courier: Cross-Platform Delivery Workbench
 Version: 0.1.0
-Authors@R: 
+Authors@R:
     person("Jane", "Doe", , "jane@example.com", role = c("aut", "cre"))
-Description: A cross-platform R package migration workbench.
+Description: A cross-platform R package courier and delivery workbench.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
