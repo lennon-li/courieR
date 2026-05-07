@@ -1,6 +1,6 @@
 #' @keywords internal
 #' @importFrom utils read.csv write.csv
-#' @import DT bsicons bslib renv rmarkdown stringr xml2 yaml
+#' @import DT bsicons bslib stringr
 "_PACKAGE"
 
 # The following block is used by usethis to automatically manage

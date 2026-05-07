@@ -17,3 +17,15 @@ A list of data.tables and a summary data.frame
 \description{
 Compare two package libraries
 }
+\examples{
+src <- data.table::data.table(
+  package  = c("dplyr", "ggplot2"),
+  version  = c("1.1.4", "3.5.1"),
+  priority = NA_character_
+)
+tgt <- data.table::data.table(
+  package = "dplyr",
+  version = "1.0.0"
+)
+inventory(src, tgt)
+}

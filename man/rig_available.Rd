@@ -12,3 +12,6 @@ Logical
 \description{
 Check if rig is available
 }
+\examples{
+rig_available()
+}

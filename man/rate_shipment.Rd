@@ -17,3 +17,14 @@ A list
 \description{
 Classify shipment risk based on check and test results
 }
+\examples{
+baseline <- data.table::data.table(
+  severity = character(), message = character(),
+  file = character(), line = character()
+)
+post <- data.table::data.table(
+  severity = "ERROR", message = "undefined symbol",
+  file = "R/foo.R", line = "10"
+)
+rate_shipment(baseline, post)
+}

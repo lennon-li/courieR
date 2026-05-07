@@ -15,3 +15,9 @@ A data.frame of R installations
 \description{
 Detect R installations on the system
 }
+\examples{
+\dontrun{
+  r <- find_routes()
+  print(r$version)
+}
+}

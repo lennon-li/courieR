@@ -15,3 +15,8 @@ A data.table
 \description{
 Scan project dependencies
 }
+\examples{
+\donttest{
+  take_inventory(tempdir())
+}
+}

@@ -16,3 +16,8 @@ Invisibly returns the path to the \code{.courier-depot} directory.
 Creates \verb{.courier-depot/} and its subdirectories in the project path.
 Writes a \code{.gitignore} to prevent tracking of logs and artifacts.
 }
+\examples{
+\donttest{
+  depot <- open_depot(tempdir())
+}
+}

@@ -3,6 +3,16 @@
 #' @param baseline_results data.table from baseline check
 #' @param post_results data.table from post-shipment check
 #' @return A list
+#' @examples
+#' baseline <- data.table::data.table(
+#'   severity = character(), message = character(),
+#'   file = character(), line = character()
+#' )
+#' post <- data.table::data.table(
+#'   severity = "ERROR", message = "undefined symbol",
+#'   file = "R/foo.R", line = "10"
+#' )
+#' rate_shipment(baseline, post)
 #' @export
 rate_shipment <- function(baseline_results, post_results) {
   if (is.null(baseline_results) || is.null(post_results)) {

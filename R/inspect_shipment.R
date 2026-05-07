@@ -2,6 +2,11 @@
 #'
 #' @param project_path Path to the project
 #' @return A named list
+#' @examples
+#' \donttest{
+#'   res <- inspect_shipment(tempdir())
+#'   res$is_package
+#' }
 #' @export
 inspect_shipment <- function(project_path) {
   project_path <- fs::path_real(project_path)

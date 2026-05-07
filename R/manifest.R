@@ -5,6 +5,11 @@
 #' @param format Return format
 #' @param timeout_sec Timeout for subprocess
 #' @return data.table
+#' @examples
+#' \donttest{
+#'   pkgs <- manifest()
+#'   head(pkgs)
+#' }
 #' @export
 manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.table", "data.frame"), timeout_sec = 30L) {
   format <- match.arg(format)

@@ -4,3 +4,9 @@
 ^\.claude$
 ^\.git$
 ^\.gitignore$
+^implementation\.md$
+^UI_REDESIGN_PLAN\.md$
+^launch_app\.R$
+^logo\.png$
+^tests/testthat/\.courier-depot$
+^LICENSE\.md$

@@ -2,6 +2,11 @@
 #'
 #' @param search_paths Optional extra paths to search
 #' @return A data.frame of R installations
+#' @examples
+#' \dontrun{
+#'   r <- find_routes()
+#'   print(r$version)
+#' }
 #' @export
 find_routes <- function(search_paths = NULL) {
   candidates <- character()
@@ -26,6 +31,20 @@ find_routes <- function(search_paths = NULL) {
     pf <- Sys.getenv("ProgramFiles")
     if (nzchar(pf)) {
       dirs <- fs::dir_ls(fs::path(pf, "R"), type = "directory", fail = FALSE)
+      candidates <- c(candidates, fs::path(dirs, "bin", "Rscript.exe"), fs::path(dirs, "bin", "x64", "Rscript.exe"))
+    }
+
+    # User-local installs (no admin rights) default to ~/AppData/Local/Programs/R
+    # or ~/Documents/R — check both
+    local_prog <- fs::path(Sys.getenv("LOCALAPPDATA"), "Programs", "R")
+    if (nzchar(Sys.getenv("LOCALAPPDATA")) && fs::dir_exists(local_prog)) {
+      dirs <- fs::dir_ls(local_prog, type = "directory", fail = FALSE)
+      candidates <- c(candidates, fs::path(dirs, "bin", "Rscript.exe"), fs::path(dirs, "bin", "x64", "Rscript.exe"))
+    }
+
+    docs_r <- fs::path(Sys.getenv("USERPROFILE"), "Documents", "R")
+    if (nzchar(Sys.getenv("USERPROFILE")) && fs::dir_exists(docs_r)) {
+      dirs <- fs::dir_ls(docs_r, type = "directory", fail = FALSE)
       candidates <- c(candidates, fs::path(dirs, "bin", "Rscript.exe"), fs::path(dirs, "bin", "x64", "Rscript.exe"))
     }
   } else if (Sys.info()["sysname"] == "Darwin") {

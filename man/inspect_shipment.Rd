@@ -15,3 +15,9 @@ A named list
 \description{
 Detect project characteristics
 }
+\examples{
+\donttest{
+  res <- inspect_shipment(tempdir())
+  res$is_package
+}
+}

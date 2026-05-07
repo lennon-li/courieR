@@ -1,19 +1,22 @@
 ui <- bslib::page_navbar(
-  title = "courieR",
+  title = tags$img(src = "logo.png", height = "96px",
+                   style = "vertical-align: middle;"),
   theme = bslib::bs_theme(version = 5, preset = "shiny"),
-  sidebar = bslib::sidebar(
-    title = "Delivery Status",
-    "Current Shipment:",
-    verbatimTextOutput("sidebar_project_path"),
-    "Destination R:",
-    verbatimTextOutput("sidebar_target_r")
+  tags$head(tags$link(rel = "stylesheet", href = "styles.css")),
+
+  bslib::nav_panel(
+    "Migrate",
+    mod_migrate_ui("migrate")
   ),
 
-  bslib::nav_panel("1. Shipment", mod_shipment_select_ui("project")),
-  bslib::nav_panel("2. Origin", mod_origin_ui("env")),
-  bslib::nav_panel("3. Destination", mod_cargo_select_ui("dep")),
-  bslib::nav_panel("4. Pickup", mod_dispatch_ui("baseline")),
-  bslib::nav_panel("5. Deliver", mod_dispatch_ui("migrate")),
-  bslib::nav_panel("6. Delivery Receipt", mod_receipt_ui("results")),
-  bslib::nav_panel("7. Manifest", mod_manifest_ui("report"))
+  bslib::nav_panel(
+    "Advanced",
+    bslib::navset_card_tab(
+      bslib::nav_panel("Packages",         mod_origin_ui("env")),
+      bslib::nav_panel("Delivery Receipt", mod_receipt_ui("results")),
+      bslib::nav_panel("Details",          uiOutput("details_panel")),
+      bslib::nav_panel("Manifest",         mod_manifest_ui("report"))
+    )
+  ),
+
 )

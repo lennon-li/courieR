@@ -7,6 +7,13 @@
 #' @param rscript_path Optional path to Rscript
 #' @param timeout_sec Timeout in seconds
 #' @return A list with process info
+#' @examples
+#' \dontrun{
+#'   tmp <- tempdir()
+#'   job <- dispatch(tmp, "message('hello')", "baseline", "document")
+#'   Sys.sleep(1)
+#'   job$process$is_alive()
+#' }
 #' @export
 dispatch <- function(project_path, expr, phase, label, rscript_path = NULL, timeout_sec = 600L) {
   start_time <- Sys.time()
@@ -19,11 +26,11 @@ dispatch <- function(project_path, expr, phase, label, rscript_path = NULL, time
   stderr_path <- fs::path(log_dir, paste0(label, "_stderr.txt"))
 
   proc <- callr::r_bg(
-    func = function(e, p) {
-      setwd(p)
+    func = function(e) {
       eval(parse(text = e))
     },
-    args = list(e = expr, p = as.character(fs::path_real(project_path))),
+    args = list(e = expr),
+    wd     = as.character(fs::path_real(project_path)),
     stdout = stdout_path,
     stderr = stderr_path
   )

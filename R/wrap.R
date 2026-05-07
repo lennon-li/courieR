@@ -5,6 +5,11 @@
 #' @param source_hint Optional hint: "CRAN", "Bioconductor", "GitHub", "local"
 #' @param github_ref Optional GitHub ref like "owner/repo@ref"
 #' @return A character vector of pak specs
+#' @examples
+#' wrap("dplyr")
+#' wrap("dplyr", version = "1.1.4")
+#' wrap("mypackage", source_hint = "Bioconductor")
+#' wrap("r-lib/rlang", source_hint = "GitHub", github_ref = "r-lib/rlang")
 #' @export
 wrap <- function(package, version = NULL, source_hint = NULL, github_ref = NULL) {
   if (!is.null(source_hint) && source_hint == "local" && !is.null(version) && file.exists(version)) {

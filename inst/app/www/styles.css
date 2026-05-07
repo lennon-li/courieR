@@ -1,4 +1,33 @@
-/* Custom styles for courieR */
-.bslib-page-navbar {
-  /* add some custom layout styling if needed */
+/* Package checklist — multi-column grid */
+#migrate-pkgs .shiny-options-group {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px 20px;
+}
+#migrate-pkgs .shiny-options-group .checkbox {
+  break-inside: avoid;
+  margin: 0;
+}
+
+/* Inline checkbox + label on same line */
+#migrate-pkgs .shiny-options-group .checkbox label {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+#migrate-pkgs .shiny-options-group .checkbox input[type="checkbox"] {
+  margin: 0 !important;
+  flex-shrink: 0;
+}
+
+/* Package label parts */
+.pkg-label  { display: flex; align-items: baseline; gap: 8px; }
+.pkg-version { color: #555; font-size: 0.82em; }
+.pkg-source  { color: #999; font-size: 0.78em; }
+
+/* Stripe R installation dropdowns */
+.selectize-dropdown-content .option:nth-child(even) {
+  background-color: #f0f4f8;
 }

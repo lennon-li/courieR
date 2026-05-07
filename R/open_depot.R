@@ -5,6 +5,10 @@
 #'
 #' @param project_path Path to the R project
 #' @return Invisibly returns the path to the `.courier-depot` directory.
+#' @examples
+#' \donttest{
+#'   depot <- open_depot(tempdir())
+#' }
 #' @export
 open_depot <- function(project_path) {
   base_dir <- depot_path(project_path)

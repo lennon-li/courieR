@@ -2,6 +2,10 @@
 #'
 #' @param project_path Path to the project
 #' @return A data.table
+#' @examples
+#' \donttest{
+#'   take_inventory(tempdir())
+#' }
 #' @export
 take_inventory <- function(project_path) {
   project_path <- fs::path_real(project_path)

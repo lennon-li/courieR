@@ -15,3 +15,12 @@ data.table
 \description{
 Parse test log
 }
+\examples{
+tmp <- tempfile(fileext = ".log")
+writeLines(c(
+  "-- Failure (test-foo.R:1): addition works ----",
+  "Expected 3, got 4."
+), tmp)
+parse_dispatch_log(tmp)
+file.remove(tmp)
+}

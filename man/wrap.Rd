@@ -21,3 +21,9 @@ A character vector of pak specs
 \description{
 Generate a pak specification for a package
 }
+\examples{
+wrap("dplyr")
+wrap("dplyr", version = "1.1.4")
+wrap("mypackage", source_hint = "Bioconductor")
+wrap("r-lib/rlang", source_hint = "GitHub", github_ref = "r-lib/rlang")
+}

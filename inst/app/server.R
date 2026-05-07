@@ -1,24 +1,27 @@
 server <- function(input, output, session) {
-  project_path <- reactiveVal(getShinyOption("courieR_project_path", default = NULL))
-  target_r_path <- reactiveVal(NULL)
-  baseline_results <- reactiveVal(list(check = NULL, test = NULL))
-  post_results <- reactiveVal(list(check = NULL, test = NULL))
+  from_r_path   <- reactiveVal(NULL)
+  to_r_path     <- reactiveVal(NULL)
+  selected_pkgs <- reactiveVal(NULL)
+  migration_log <- reactiveVal(NULL)
 
-  output$sidebar_project_path <- renderText({
-    p <- project_path()
-    if (is.null(p)) "None selected" else as.character(p)
+  output$details_panel <- renderUI({
+    src <- from_r_path()
+    tgt <- to_r_path()
+    bslib::layout_column_wrap(
+      width = 1/2,
+      bslib::card(
+        bslib::card_header("Origin R"),
+        bslib::card_body(if (is.null(src)) "Not selected" else src)
+      ),
+      bslib::card(
+        bslib::card_header("Destination R"),
+        bslib::card_body(if (is.null(tgt)) "Not selected" else tgt)
+      )
+    )
   })
 
-  output$sidebar_target_r <- renderText({
-    t <- target_r_path()
-    if (is.null(t)) "Not set" else as.character(t)
-  })
-
-  mod_shipment_select_server("project", project_path)
-  mod_origin_server("env", project_path)
-  mod_cargo_select_server("dep", project_path, target_r_path)
-  mod_dispatch_server("baseline", phase = "baseline", project_path, target_r_path, baseline_results)
-  mod_dispatch_server("migrate", phase = "post_migration", project_path, target_r_path, post_results)
-  mod_receipt_server("results", baseline_results, post_results)
-  mod_manifest_server("report", project_path)
+  mod_migrate_server("migrate", from_r_path, to_r_path, selected_pkgs, migration_log)
+  mod_origin_server("env", from_r_path)
+  mod_receipt_server("results", migration_log)
+  mod_manifest_server("report", from_r_path, to_r_path, migration_log)
 }

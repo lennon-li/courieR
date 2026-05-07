@@ -7,6 +7,18 @@
 #' @param upgrade Logical. Passed to pak
 #' @param ... Extra arguments
 #' @return A list with shipment results
+#' @examples
+#' \dontrun{
+#'   routes <- find_routes()
+#'   if (nrow(routes) >= 2) {
+#'     result <- ship(
+#'       source_path = routes$rscript_path[1],
+#'       target_path = routes$rscript_path[2],
+#'       dry_run = TRUE
+#'     )
+#'     print(result$plan)
+#'   }
+#' }
 #' @export
 ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upgrade = FALSE, ...) {
   start_time <- Sys.time()

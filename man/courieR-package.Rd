@@ -6,14 +6,22 @@
 \alias{courieR-package}
 \title{courieR: R Package Courier: Cross-Platform Delivery Workbench}
 \description{
-A cross-platform R package courier and delivery workbench.
+Migrates installed R packages between R installations on the same machine. Scans installed packages via manifest(), compares libraries via inventory(), and delivers packages to a new R version via ship(). Includes a Shiny dashboard (open_hub()) for point-and-click migration without requiring any packages to be installed on the origin R version.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/lennon-li/courieR}
+  \item Report bugs at \url{https://github.com/lennon-li/courieR/issues}
+}
+
 }
 \author{
-\strong{Maintainer}: Jane Doe \email{jane@example.com}
+\strong{Maintainer}: Lennon Li \email{lennon.yeli@gmail.com}
 
 Authors:
 \itemize{
-  \item Jane Doe \email{jane@example.com}
+  \item Lennon Li \email{lennon.yeli@gmail.com}
 }
 
 }

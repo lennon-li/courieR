@@ -32,3 +32,11 @@ A list with process info
 \description{
 Run an R command in the background and log output
 }
+\examples{
+\dontrun{
+  tmp <- tempdir()
+  job <- dispatch(tmp, "message('hello')", "baseline", "document")
+  Sys.sleep(1)
+  job$process$is_alive()
+}
+}

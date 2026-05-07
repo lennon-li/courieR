@@ -3,6 +3,17 @@
 #' @param source_pkgs data.table from `manifest`
 #' @param target_pkgs data.table from `manifest`
 #' @return A list of data.tables and a summary data.frame
+#' @examples
+#' src <- data.table::data.table(
+#'   package  = c("dplyr", "ggplot2"),
+#'   version  = c("1.1.4", "3.5.1"),
+#'   priority = NA_character_
+#' )
+#' tgt <- data.table::data.table(
+#'   package = "dplyr",
+#'   version = "1.0.0"
+#' )
+#' inventory(src, tgt)
 #' @export
 inventory <- function(source_pkgs, target_pkgs) {
   if (nrow(source_pkgs) == 0) {

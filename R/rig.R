@@ -1,5 +1,7 @@
 #' Check if rig is available
 #' @return Logical
+#' @examples
+#' rig_available()
 #' @export
 rig_available <- function() {
   nzchar(Sys.which("rig"))
@@ -7,6 +9,10 @@ rig_available <- function() {
 
 #' List rig installations
 #' @return data.frame
+#' @examples
+#' \donttest{
+#'   if (rig_available()) rig_list()
+#' }
 #' @export
 rig_list <- function() {
   if (!rig_available()) return(data.frame())
@@ -24,6 +30,10 @@ rig_list <- function() {
 #' Install R via rig
 #' @param version R version
 #' @param wait Logical
+#' @examples
+#' \dontrun{
+#'   rig_install("4.5.0")
+#' }
 #' @export
 rig_install <- function(version, wait = TRUE) {
   if (!rig_available()) stop("rig not available")

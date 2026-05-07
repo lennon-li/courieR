@@ -12,3 +12,8 @@ data.frame
 \description{
 List rig installations
 }
+\examples{
+\donttest{
+  if (rig_available()) rig_list()
+}
+}

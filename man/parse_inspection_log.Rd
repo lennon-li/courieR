@@ -15,3 +15,12 @@ data.table
 \description{
 Parse R CMD check log
 }
+\examples{
+tmp <- tempfile(fileext = ".log")
+writeLines(c(
+  "* checking examples ... WARNING",
+  "  An example result is marked with \\\\donttest."
+), tmp)
+parse_inspection_log(tmp)
+file.remove(tmp)
+}

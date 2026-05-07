@@ -32,3 +32,16 @@ A list with shipment results
 \description{
 Ship packages between R installations
 }
+\examples{
+\dontrun{
+  routes <- find_routes()
+  if (nrow(routes) >= 2) {
+    result <- ship(
+      source_path = routes$rscript_path[1],
+      target_path = routes$rscript_path[2],
+      dry_run = TRUE
+    )
+    print(result$plan)
+  }
+}
+}

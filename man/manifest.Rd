@@ -26,3 +26,9 @@ data.table
 \description{
 List packages installed in a library, optionally via a different R executable
 }
+\examples{
+\donttest{
+  pkgs <- manifest()
+  head(pkgs)
+}
+}

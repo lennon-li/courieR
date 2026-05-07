@@ -14,3 +14,8 @@ rig_install(version, wait = TRUE)
 \description{
 Install R via rig
 }
+\examples{
+\dontrun{
+  rig_install("4.5.0")
+}
+}

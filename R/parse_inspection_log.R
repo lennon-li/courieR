@@ -2,6 +2,14 @@
 #'
 #' @param log_path Path to the log file
 #' @return data.table
+#' @examples
+#' tmp <- tempfile(fileext = ".log")
+#' writeLines(c(
+#'   "* checking examples ... WARNING",
+#'   "  An example result is marked with \\donttest."
+#' ), tmp)
+#' parse_inspection_log(tmp)
+#' file.remove(tmp)
 #' @export
 parse_inspection_log <- function(log_path) {
   empty_dt <- data.table::data.table(

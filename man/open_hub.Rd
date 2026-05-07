@@ -16,3 +16,8 @@ open_hub(project_path = NULL, port = NULL, launch.browser = TRUE)
 \description{
 Launch the courieR delivery hub dashboard
 }
+\examples{
+\dontrun{
+  open_hub()
+}
+}
