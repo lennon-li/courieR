@@ -48,7 +48,7 @@ inventory <- function(source_pkgs, target_pkgs) {
 
   if ("source.x" %in% names(dt)) {
     data.table::setnames(dt, "source.x", "source")
-    if ("source.y" %in% names(dt)) dt[, source.y := NULL]
+    if ("source.y" %in% names(dt)) data.table::set(dt, j = "source.y", value = NULL)
   }
 
   missing_dt <- dt[is.na(dt$version.y), ]
