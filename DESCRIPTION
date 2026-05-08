@@ -34,4 +34,6 @@ Suggests:
     testthat (>= 3.0.0),
     withr (>= 3.0.0),
     mockery (>= 0.4.4),
+    knitr (>= 1.45),
     rmarkdown (>= 2.26)
+VignetteBuilder: knitr

@@ -1,0 +1,111 @@
+---
+title: "Getting Started with courieR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with courieR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+courieR moves your installed R packages from an old R version to a new one on the same machine. This vignette walks you through both the dashboard and the programmatic CLI.
+
+## Installation
+
+Install courieR on your **new** R version:
+
+```{r}
+remotes::install_github("lennon-li/courieR")
+```
+
+You do not need to install anything on your old R version.
+
+## Step 1 — Discover Your R Installations
+
+`find_routes()` scans the system and returns a data frame of every R version it finds:
+
+```{r}
+library(courieR)
+
+routes <- find_routes()
+routes[, c("version", "rscript_path", "is_current")]
+#>   version                              rscript_path is_current
+#> 1   4.2.3  C:/Program Files/R/R-4.2.3/bin/Rscript.exe      FALSE
+#> 2   4.4.1  C:/Program Files/R/R-4.4.1/bin/Rscript.exe       TRUE
+```
+
+`is_current = TRUE` marks the R you are running right now — that is your destination.
+
+## Step 2a — Use the Dashboard (Recommended)
+
+Launch the Shiny hub:
+
+```{r}
+open_hub()
+```
+
+The dashboard opens in your browser with two tabs:
+
+**Migrate tab** — the main workflow:
+
+1. Select your source (old R) from the From dropdown
+2. Select your destination (new R) from the To dropdown — defaults to current R
+3. Review the package checklist — all packages are selected by default
+4. Click **Deliver** and watch the progress output
+
+**Advanced tab** — for inspection and diagnostics:
+
+- Manifest: full package list for any R version
+- Delivery Receipt: results of the last ship
+- Diagnostics: raw logs if anything went wrong
+
+## Step 2b — Use the CLI
+
+Prefer code? `ship()` does the same thing programmatically:
+
+```{r}
+# always do a dry run first to see the plan
+result <- ship(
+  source_path = routes$rscript_path[1],   # old R
+  target_path = routes$rscript_path[2],   # new R (current)
+  dry_run = TRUE
+)
+
+# review what will be installed or upgraded
+print(result$plan[, c("package", "action", "version.x")])
+```
+
+When you are happy with the plan, run for real:
+
+```{r}
+result <- ship(
+  source_path = routes$rscript_path[1],
+  target_path = routes$rscript_path[2]
+)
+
+# check results
+result$results[result$results$status == "error", ]
+```
+
+## Inspecting Libraries Manually
+
+`manifest()` lists packages for any R version. `inventory()` compares two manifests:
+
+```{r}
+old_pkgs <- manifest(rscript_path = routes$rscript_path[1])
+new_pkgs <- manifest(rscript_path = routes$rscript_path[2])
+
+comp <- inventory(old_pkgs, new_pkgs)
+nrow(comp$missing)    # packages in old R but not new R
+nrow(comp$outdated)   # packages where old R has a newer version
+```
+
+## Tips
+
+- courieR skips base and recommended packages — only user-installed packages are migrated
+- If a package fails to install, check `result$results` for the error message
+- CRAN packages are reinstalled fresh from CRAN; GitHub packages are detected and sourced via pak
+- Run `find_routes(search_paths = "C:/custom/R")` to include non-standard install locations
