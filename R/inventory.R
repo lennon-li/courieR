@@ -16,29 +16,14 @@
 #' inventory(src, tgt)
 #' @export
 inventory <- function(source_pkgs, target_pkgs) {
-  if (nrow(source_pkgs) == 0) {
-    empty_dt <- data.table::data.table(package = character(), version.x = character(), version.y = character(), source = character())
-    return(list(
-      missing = empty_dt,
-      outdated = empty_dt,
-      newer = empty_dt,
-      same = empty_dt,
-      summary = data.frame(missing = 0, outdated = 0, newer = 0, same = 0, total_source = 0)
-    ))
-  }
+  source_pkgs <- normalize_manifest_packages(source_pkgs)
+  target_pkgs <- normalize_manifest_packages(target_pkgs)
 
   # Exclude base/recommended packages from source as they are part of R
   src <- source_pkgs[is.na(source_pkgs$priority) | !(source_pkgs$priority %in% c("base", "recommended")), ]
 
   if (nrow(src) == 0) {
-    empty_dt <- data.table::data.table(package = character(), version.x = character(), version.y = character(), source = character())
-    return(list(
-      missing = empty_dt,
-      outdated = empty_dt,
-      newer = empty_dt,
-      same = empty_dt,
-      summary = data.frame(missing = 0, outdated = 0, newer = 0, same = 0, total_source = 0)
-    ))
+    return(empty_inventory_result())
   }
 
   # Merge
@@ -48,28 +33,32 @@ inventory <- function(source_pkgs, target_pkgs) {
 
   if ("source.x" %in% names(dt)) {
     data.table::setnames(dt, "source.x", "source")
-    if ("source.y" %in% names(dt)) data.table::set(dt, j = "source.y", value = NULL)
+  }
+  if ("source.y" %in% names(dt)) {
+    data.table::setnames(dt, "source.y", "target_source")
   }
 
-  missing_dt <- dt[is.na(dt$version.y), ]
+  status <- rep("missing", nrow(dt))
+  has_target <- which(!is.na(dt$version.y))
 
-  dt_both <- dt[!is.na(dt$version.y), ]
+  if (length(has_target) > 0) {
+    vx <- package_version(dt$version.x[has_target])
+    vy <- package_version(dt$version.y[has_target])
 
-  if (nrow(dt_both) > 0) {
-    vx <- numeric_version(dt_both$version.x)
-    vy <- numeric_version(dt_both$version.y)
-
-    outdated_dt <- dt_both[vx > vy, ]
-    newer_dt <- dt_both[vy > vx, ]
-    same_dt <- dt_both[vx == vy, ]
-  } else {
-    empty <- dt[0, ]
-    outdated_dt <- empty
-    newer_dt <- empty
-    same_dt <- empty
+    target_status <- rep("same", length(has_target))
+    target_status[vx > vy] <- "outdated"
+    target_status[vy > vx] <- "newer"
+    status[has_target] <- target_status
   }
+  data.table::set(dt, j = "status", value = status)
+
+  missing_dt <- dt[which(dt[["status"]] == "missing"), ]
+  outdated_dt <- dt[which(dt[["status"]] == "outdated"), ]
+  newer_dt <- dt[which(dt[["status"]] == "newer"), ]
+  same_dt <- dt[which(dt[["status"]] == "same"), ]
 
   res <- list(
+    comparison = dt,
     missing = missing_dt,
     outdated = outdated_dt,
     newer = newer_dt,
@@ -83,4 +72,56 @@ inventory <- function(source_pkgs, target_pkgs) {
     )
   )
   return(res)
+}
+
+normalize_manifest_packages <- function(pkgs) {
+  dt <- data.table::as.data.table(pkgs)
+
+  if (ncol(dt) == 0) {
+    return(data.table::data.table(
+      package = character(),
+      version = character(),
+      priority = character(),
+      source = character()
+    ))
+  }
+
+  if (!"package" %in% names(dt)) {
+    data.table::set(dt, j = "package", value = rep("", nrow(dt)))
+  }
+  if (!"version" %in% names(dt)) {
+    data.table::set(dt, j = "version", value = rep("", nrow(dt)))
+  }
+  if (!"priority" %in% names(dt)) {
+    data.table::set(dt, j = "priority", value = rep(NA_character_, nrow(dt)))
+  }
+  if (!"source" %in% names(dt)) {
+    data.table::set(dt, j = "source", value = rep(NA_character_, nrow(dt)))
+  }
+
+  data.table::set(dt, j = "package", value = as.character(dt[["package"]]))
+  data.table::set(dt, j = "version", value = as.character(dt[["version"]]))
+  data.table::set(dt, j = "priority", value = as.character(dt[["priority"]]))
+  data.table::set(dt, j = "source", value = as.character(dt[["source"]]))
+
+  dt[]
+}
+
+empty_inventory_result <- function() {
+  empty_dt <- data.table::data.table(
+    package = character(),
+    version.x = character(),
+    version.y = character(),
+    source = character(),
+    status = character()
+  )
+
+  list(
+    comparison = empty_dt,
+    missing = empty_dt,
+    outdated = empty_dt,
+    newer = empty_dt,
+    same = empty_dt,
+    summary = data.frame(missing = 0, outdated = 0, newer = 0, same = 0, total_source = 0)
+  )
 }

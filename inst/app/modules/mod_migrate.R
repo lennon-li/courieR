@@ -32,6 +32,34 @@ mod_migrate_server <- function(id, from_r_path, to_r_path, selected_pkgs, migrat
       paste0("R ", version, "  —  ", loc)
     }
 
+    build_comparison_table <- function(inv) {
+      if (!is.null(inv$comparison)) {
+        return(data.table::as.data.table(inv$comparison))
+      }
+
+      status_map <- c(
+        missing = "missing",
+        outdated = "outdated",
+        newer = "newer",
+        same = "same"
+      )
+
+      parts <- lapply(names(status_map), function(name) {
+        dt <- inv[[name]]
+        if (is.null(dt) || nrow(dt) == 0) {
+          return(NULL)
+        }
+
+        dt <- data.table::as.data.table(dt)
+        if (!"status" %in% names(dt)) {
+          data.table::set(dt, j = "status", value = rep(status_map[[name]], nrow(dt)))
+        }
+        dt
+      })
+
+      data.table::rbindlist(parts, use.names = TRUE, fill = TRUE)
+    }
+
     load_routes <- function() {
       tryCatch({
         r <- courieR::find_routes()
@@ -51,13 +79,31 @@ mod_migrate_server <- function(id, from_r_path, to_r_path, selected_pkgs, migrat
     session$onFlushed(load_routes, once = TRUE)
     observeEvent(input$refresh_routes, { load_routes() })
 
-    pkg_list <- reactive({
-      p <- input$from_r
-      if (is.null(p) || !nzchar(p)) return(NULL)
-      withProgress(message = "Scanning origin R...", {
+    package_inventory <- reactive({
+      src <- input$from_r
+      tgt <- input$to_r
+      src_msg <- if (is.null(src)) "<null>" else src
+      tgt_msg <- if (is.null(tgt)) "<null>" else tgt
+      message(sprintf("[mod_migrate] package_inventory fired: from=%s to=%s", src_msg, tgt_msg))
+
+      if (is.null(src) || !nzchar(src) || is.null(tgt) || !nzchar(tgt)) {
+        return(NULL)
+      }
+
+      withProgress(message = "Comparing R libraries...", {
         tryCatch(
-          courieR::manifest(rscript_path = p),
-          error = function(e) { showNotification(e$message, type = "error"); NULL }
+          {
+            src_pkgs <- courieR::manifest(rscript_path = src)
+            tgt_pkgs <- courieR::manifest(rscript_path = tgt)
+            comparison <- build_comparison_table(courieR::inventory(src_pkgs, tgt_pkgs))
+            message(sprintf("[mod_migrate] inventory rows=%d missing=%d", nrow(comparison), sum(comparison[["status"]] == "missing", na.rm = TRUE)))
+            comparison
+          },
+          error = function(e) {
+            message(sprintf("[mod_migrate] inventory error: %s", e$message))
+            showNotification(e$message, type = "error")
+            NULL
+          }
         )
       })
     })
@@ -66,18 +112,31 @@ mod_migrate_server <- function(id, from_r_path, to_r_path, selected_pkgs, migrat
     observeEvent(input$to_r,   { to_r_path(input$to_r) })
 
     output$pkg_checklist_ui <- renderUI({
-      pkgs <- pkg_list()
-      if (is.null(pkgs) || nrow(pkgs) == 0) {
-        return(tags$p("Select an origin R installation to load packages."))
+      comparison <- package_inventory()
+      if (is.null(comparison)) {
+        return(tags$p("Select both origin and destination R installations to compare packages."))
       }
-      pkgs      <- pkgs[!duplicated(pkgs$package), ]
-      pkg_names <- sort(pkgs$package)
-      pkg_info  <- pkgs[match(pkg_names, pkgs$package), ]
+
+      if (nrow(comparison) == 0) {
+        return(tags$p("No transferable packages found in the origin R installation."))
+      }
+
+      pkg_info <- comparison[order(comparison[["package"]]), ]
+      pkg_names <- pkg_info[["package"]]
+      selected_pkgs_default <- pkg_info[["package"]][pkg_info[["status"]] == "missing"]
       choice_labels <- lapply(seq_len(nrow(pkg_info)), function(i) {
+        source_value <- if ("source" %in% names(pkg_info) && length(pkg_info[["source"]]) >= i) pkg_info[["source"]][i] else NA_character_
+        status_value <- if ("status" %in% names(pkg_info) && length(pkg_info[["status"]]) >= i) pkg_info[["status"]][i] else "unknown"
+        target_version <- if ("version.y" %in% names(pkg_info) && length(pkg_info[["version.y"]]) >= i && !is.na(pkg_info[["version.y"]][i])) {
+          pkg_info[["version.y"]][i]
+        } else {
+          "not installed"
+        }
         tags$span(class = "pkg-label",
-          tags$span(pkg_info$package[i]),
-          tags$span(class = "pkg-version", pkg_info$version[i]),
-          tags$span(class = "pkg-source",  pkg_info$source[i])
+          tags$span(pkg_info[["package"]][i]),
+          tags$span(class = "pkg-version", paste("from", pkg_info[["version.x"]][i])),
+          tags$span(class = "pkg-version", paste("to", target_version)),
+          tags$span(class = "pkg-source", paste(status_value, if (!is.na(source_value)) paste0("(", source_value, ")") else ""))
         )
       })
       tagList(
@@ -89,14 +148,23 @@ mod_migrate_server <- function(id, from_r_path, to_r_path, selected_pkgs, migrat
         checkboxGroupInput(ns("pkgs"), NULL,
           choiceNames  = choice_labels,
           choiceValues = pkg_names,
-          selected     = pkg_names
+          selected     = selected_pkgs_default
         )
       )
     })
 
+    observeEvent(package_inventory(), {
+      comparison <- package_inventory()
+      if (is.null(comparison)) {
+        selected_pkgs(character(0))
+        return()
+      }
+      selected_pkgs(comparison[["package"]][comparison[["status"]] == "missing"])
+    }, ignoreNULL = FALSE)
+
     observeEvent(input$select_all, {
-      pkgs <- pkg_list()
-      if (!is.null(pkgs)) updateCheckboxGroupInput(session, "pkgs", selected = sort(pkgs$package))
+      comparison <- package_inventory()
+      if (!is.null(comparison)) updateCheckboxGroupInput(session, "pkgs", selected = comparison$package)
     })
     observeEvent(input$deselect_all, {
       updateCheckboxGroupInput(session, "pkgs", selected = character(0))

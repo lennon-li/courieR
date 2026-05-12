@@ -25,6 +25,33 @@ test_that("inventory classifies correctly", {
   expect_equal(res$same$package, "pkgC")
 
   expect_equal(res$summary$total_source, 4)
+  expect_equal(res$comparison[["status"]][match(c("pkgA", "pkgB", "pkgC", "pkgE"), res$comparison[["package"]])],
+               c("missing", "outdated", "same", "missing"))
+})
+
+test_that("inventory handles empty or pre-populated destination libraries", {
+  src <- data.table::data.table(
+    package = c("pkgA", "pkgB", "pkgC"),
+    version = c("1.0.0", "2.0.0", "3.0.0"),
+    priority = NA_character_,
+    source = "CRAN"
+  )
+
+  populated_tgt <- data.table::data.table(
+    package = c("pkgB", "pkgC", "pkgZ"),
+    version = c("1.0.0", "3.0.0", "9.9.9"),
+    source = "CRAN"
+  )
+
+  populated_res <- inventory(src, populated_tgt)
+  expect_equal(populated_res$comparison[["status"]][match(c("pkgA", "pkgB", "pkgC"), populated_res$comparison[["package"]])],
+               c("missing", "outdated", "same"))
+  expect_equal(populated_res$comparison[["package"]][populated_res$comparison[["status"]] == "missing"], "pkgA")
+
+  empty_tgt <- data.table::data.table()
+  empty_res <- inventory(src, empty_tgt)
+  expect_equal(nrow(empty_res$missing), 3)
+  expect_equal(sort(empty_res$comparison[["package"]][empty_res$comparison[["status"]] == "missing"]), sort(src$package))
 })
 
 test_that("wrap works", {

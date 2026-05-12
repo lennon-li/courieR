@@ -16,7 +16,18 @@
       "Bash(git init *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "Bash(Remove-Item *)",
+      "PowerShell(Rscript *)",
+      "PowerShell(Copy-Item *)",
+      "Bash(Get-ChildItem *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\lennon.li\\\\Documents\\\\GitHub\\\\courieR\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}})",
+      "mcp__filesystem__read_multiple_files",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\lennon.li\\\\Documents\\\\GitHub\\\\courieR\" -File | Where-Object {$_.Name -match \"MIT|LICENSE|COPYING\"})",
+      "Bash(git -C /c/Users/lennon.li/Documents/GitHub/courieR status --porcelain)",
+      "Bash(git *)",
+      "Bash(grep -n \"C:/Program Files\\\\|C:\\\\\\\\\\\\\\\\Program Files\\\\|hardcoded\\\\|/home/\\\\|/Users/\" /c/Users/lennon.li/Documents/GitHub/courieR/R/*.R)",
+      "Bash(start Rscript -e \"devtools::load_all\\(\\); open_hub\\(\\)\")"
     ]
   },
   "disabledMcpjsonServers": [
