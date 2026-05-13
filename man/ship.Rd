@@ -32,6 +32,17 @@ A list with shipment results
 \description{
 Ship packages between R installations
 }
+\section{Safety}{
+
+\code{ship()} installs packages into the target R library via \code{\link[pak:pkg_install]{pak::pkg_install()}}
+running in a subprocess. Set \code{dry_run = TRUE} to preview the migration plan
+without installing anything. When \code{dry_run = FALSE} (the default), pak
+from the current R session is used to install into the target library, which
+is the correct design for a migration tool (the source R need not have pak
+installed). All subprocess calls are confined to the target library path; no
+files are written outside the target library or the R temporary directory.
+}
+
 \examples{
 \dontrun{
   routes <- find_routes()
