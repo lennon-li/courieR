@@ -6,7 +6,7 @@
 \alias{courieR-package}
 \title{courieR: R Package Courier: Cross-Platform Delivery Workbench}
 \description{
-Migrates installed R packages between R installations on the same machine. Scans installed packages via manifest(), compares libraries via inventory(), and delivers packages to a new R version via ship(). Includes a Shiny dashboard (open_hub()) for point-and-click migration without requiring any packages to be installed on the origin R version.
+Syncs installed R packages between R installations on the same machine. Detects all R versions on the system (including non-admin and user-local installs) via find_routes(), compares package libraries via manifest() and inventory(), and installs or upgrades packages into any target R via ship(). Includes a Shiny dashboard (open_hub()) for point-and-click one-way or two-way sync without requiring any packages to be installed on the source R version.
 }
 \seealso{
 Useful links:

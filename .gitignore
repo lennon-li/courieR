@@ -1,0 +1,6 @@
+.Rproj.user
+*.Rproj
+inst/app/.Rhistory
+tmp-open-hub*.log
+tmp-open-hub*.R
+tmp-run-open-hub*.R

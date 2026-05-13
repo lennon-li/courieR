@@ -10,3 +10,6 @@
 ^logo\.png$
 ^tests/testthat/\.courier-depot$
 ^LICENSE\.md$
+^tmp-.*\.log$
+^tmp-.*\.R$
+^launch_app\.R$

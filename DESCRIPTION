@@ -4,11 +4,13 @@ Title: R Package Courier: Cross-Platform Delivery Workbench
 Version: 0.1.0
 Authors@R:
     person("Lennon", "Li", , "lennon.yeli@gmail.com", role = c("aut", "cre"))
-Description: Migrates installed R packages between R installations on the same
-    machine. Scans installed packages via manifest(), compares libraries via
-    inventory(), and delivers packages to a new R version via ship(). Includes
-    a Shiny dashboard (open_hub()) for point-and-click migration without
-    requiring any packages to be installed on the origin R version.
+Description: Syncs installed R packages between R installations on the same
+    machine. Detects all R versions on the system (including non-admin and
+    user-local installs) via find_routes(), compares package libraries via
+    manifest() and inventory(), and installs or upgrades packages into any
+    target R via ship(). Includes a Shiny dashboard (open_hub()) for
+    point-and-click one-way or two-way sync without requiring any packages to
+    be installed on the source R version.
 License: MIT + file LICENSE
 URL: https://github.com/lennon-li/courieR
 BugReports: https://github.com/lennon-li/courieR/issues
