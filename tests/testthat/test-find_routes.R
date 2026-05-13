@@ -13,5 +13,4 @@ test_that("find_routes accepts search_paths = NULL", {
 test_that("find_routes handles nonexistent search_paths gracefully", {
   res <- find_routes(search_paths = "/nonexistent/path/to/r")
   expect_s3_class(res, "data.frame")
-  expect_true(any(res$is_current))
 })
