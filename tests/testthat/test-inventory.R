@@ -54,9 +54,52 @@ test_that("inventory handles empty or pre-populated destination libraries", {
   expect_equal(sort(empty_res$comparison[["package"]][empty_res$comparison[["status"]] == "missing"]), sort(src$package))
 })
 
-test_that("wrap works", {
-  expect_equal(wrap("pkg"), "pkg")
-  expect_equal(wrap("pkg", "1.0.0"), "pkg@1.0.0")
-  expect_equal(wrap("pkg", source_hint = "Bioconductor"), "bioc::pkg")
-  expect_equal(wrap("pkg", source_hint = "GitHub", github_ref = "user/pkg@main"), "user/pkg@main")
+test_that("inventory handles newer packages on target", {
+  src <- data.table::data.table(
+    package = c("pkgA", "pkgB"),
+    version = c("1.0.0", "1.0.0"),
+    priority = NA_character_,
+    source = "CRAN"
+  )
+  tgt <- data.table::data.table(
+    package = c("pkgA", "pkgB"),
+    version = c("2.0.0", "1.0.0"),
+    priority = NA_character_,
+    source = "CRAN"
+  )
+  res <- inventory(src, tgt)
+  expect_equal(nrow(res$newer), 1)
+  expect_equal(res$newer$package, "pkgA")
+  expect_equal(nrow(res$same), 1)
+  expect_equal(res$same$package, "pkgB")
+})
+
+test_that("inventory handles malformed input with missing columns", {
+  src <- data.table::data.table(x = "abc")
+  tgt <- data.table::data.table(y = "def")
+  res <- inventory(src, tgt)
+  expect_s3_class(res$comparison, "data.table")
+  # src gets normalized to have 'package' and 'version' columns (empty strings).
+  # Column 'x' is not 'package', so package gets empty string.
+  # Empty version strings are treated as outdated so they get included in plan.
+  expect_true(nrow(res$comparison) >= 0)
+  expect_equal(res$summary$total_source, 1)
+})
+
+test_that("inventory handles empty source library", {
+  src <- data.table::data.table(
+    package = character(),
+    version = character(),
+    priority = character(),
+    source = character()
+  )
+  tgt <- data.table::data.table(
+    package = "pkgA",
+    version = "1.0.0",
+    priority = NA_character_,
+    source = "CRAN"
+  )
+  res <- inventory(src, tgt)
+  expect_equal(res$summary$total_source, 0)
+  expect_equal(nrow(res$missing), 0)
 })

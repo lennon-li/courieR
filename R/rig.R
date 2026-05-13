@@ -30,6 +30,7 @@ rig_list <- function() {
 #' Install R via rig
 #' @param version R version
 #' @param wait Logical
+#' @return The result of [processx::run()].
 #' @examples
 #' \dontrun{
 #'   rig_install("4.5.0")

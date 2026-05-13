@@ -42,12 +42,19 @@ inventory <- function(source_pkgs, target_pkgs) {
   has_target <- which(!is.na(dt$version.y))
 
   if (length(has_target) > 0) {
-    vx <- package_version(dt$version.x[has_target])
-    vy <- package_version(dt$version.y[has_target])
+    vx_str <- dt$version.x[has_target]
+    vy_str <- dt$version.y[has_target]
+    valid_ver <- nzchar(vx_str) & nzchar(vy_str)
+
+    vx <- package_version(ifelse(valid_ver, vx_str, "0.0.0"))
+    vy <- package_version(ifelse(valid_ver, vy_str, "0.0.0"))
 
     target_status <- rep("same", length(has_target))
     target_status[vx > vy] <- "outdated"
     target_status[vy > vx] <- "newer"
+    # Non-parseable versions default to "missing"-like handling: mark as outdated
+    # so they get included in the install plan
+    target_status[!valid_ver] <- "outdated"
     status[has_target] <- target_status
   }
   data.table::set(dt, j = "status", value = status)

@@ -1,7 +1,14 @@
 #' Detect R installations on the system
 #'
-#' @param search_paths Optional extra paths to search
-#' @return A data.frame of R installations
+#' Scans the current machine for R installations across multiple sources
+#' per platform.
+#'
+#' @param search_paths An optional character vector of additional paths to
+#'   search. Each element may be a directory containing `bin/Rscript` (or
+#'   `bin/x64/Rscript.exe` on Windows), or a direct path to an `Rscript`
+#'   executable.
+#' @return A data.frame with columns: `version`, `major`, `minor`,
+#'   `rscript_path`, `lib_paths`, and `is_current`.
 #' @examples
 #' \dontrun{
 #'   r <- find_routes()

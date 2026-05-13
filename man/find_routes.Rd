@@ -7,13 +7,18 @@
 find_routes(search_paths = NULL)
 }
 \arguments{
-\item{search_paths}{Optional extra paths to search}
+\item{search_paths}{An optional character vector of additional paths to
+search. Each element may be a directory containing \code{bin/Rscript} (or
+\code{bin/x64/Rscript.exe} on Windows), or a direct path to an \code{Rscript}
+executable.}
 }
 \value{
-A data.frame of R installations
+A data.frame with columns: \code{version}, \code{major}, \code{minor},
+\code{rscript_path}, \code{lib_paths}, and \code{is_current}.
 }
 \description{
-Detect R installations on the system
+Scans the current machine for R installations across multiple sources
+per platform.
 }
 \examples{
 \dontrun{

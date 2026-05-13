@@ -28,7 +28,7 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
   script_file <- fs::path_temp("courieR_manifest.R")
   on.exit(if (fs::file_exists(script_file)) fs::file_delete(script_file), add = TRUE)
 
-  lib_arg <- if (is.null(lib_path)) "NULL" else paste0("'", lib_path, "'")
+  lib_arg <- if (is.null(lib_path)) "NULL" else deparse(lib_path)
 
   script_content <- paste0('
 suppressPackageStartupMessages({
@@ -91,7 +91,7 @@ suppressPackageStartupMessages({
 
   parsed <- NULL
   if (grepl("^CSV_START", out_text)) {
-    csv_str <- sub(".*CSV_START\n(.*?)\nCSV_END.*", "\\1", out_text)
+    csv_str <- sub("(?s).*?CSV_START\\n(.*)\\nCSV_END.*", "\\1", out_text, perl = TRUE)
     parsed <- read.csv(text = csv_str, stringsAsFactors = FALSE)
   } else {
     parsed <- tryCatch(
