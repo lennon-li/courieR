@@ -4,11 +4,12 @@ Title: Migrate Installed R Packages Between R Versions
 Version: 0.2.0
 Authors@R:
     person("Lennon", "Li", , "lennon.yeli@gmail.com", role = c("aut", "cre"))
-Description: Detects R installations on the current machine and migrates
-    installed R packages between them. Provides manifest() to scan package
-    libraries via subprocess, inventory() to compare two libraries, and
-    ship() to install packages into a target R version using pak. Includes
-    a Shiny dashboard (open_hub()) for interactive migration.
+Description: Detects all R installations on the current machine and migrates
+    installed R packages between them. Provides find_routes() to discover R
+    versions, manifest() to scan package libraries via subprocess, inventory()
+    to compare two libraries, and ship() to install packages into a target R
+    version using pak. Includes a Shiny dashboard (open_hub()) for interactive
+    one-way and two-way migration.
 License: MIT + file LICENSE
 URL: https://github.com/lennon-li/courieR
 BugReports: https://github.com/lennon-li/courieR/issues

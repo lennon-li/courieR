@@ -32,7 +32,7 @@ mod_origin_server <- function(id, from_r_path) {
       p    <- from_r_path()
       if (is.null(pkgs)) {
         return(bslib::card(bslib::card_body(
-          "Select an origin R installation in the Migrate tab."
+          "Select an R installation in the Sync tab."
         )))
       }
       bslib::layout_column_wrap(
