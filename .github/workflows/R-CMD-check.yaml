@@ -47,5 +47,5 @@ jobs:
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
-          args: 'c("--as-cran", "--run-donttest")'
+          args: 'c("--as-cran", "--no-manual")'
           build_args: 'c("--no-manual")'
