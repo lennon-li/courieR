@@ -76,8 +76,14 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   }
 
   tgt_lib_script <- "cat(.libPaths()[1])"
-  tgt_lib_res <- processx::run(target_path, c("--vanilla", "-e", tgt_lib_script))
+  tgt_lib_res <- processx::run(target_path, c("--vanilla", "-e", tgt_lib_script), error_on_status = FALSE)
   tgt_lib <- trimws(tgt_lib_res$stdout)
+  if (tgt_lib_res$status != 0 || !nzchar(tgt_lib)) {
+    cli::cli_abort(
+      "Could not determine target library path (exit {tgt_lib_res$status}). stderr: {tgt_lib_res$stderr}",
+      class = "courieR_subprocess_error"
+    )
+  }
 
   specs <- plan$pak_spec
 

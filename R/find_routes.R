@@ -172,7 +172,8 @@ find_routes <- function(search_paths = NULL) {
     rig_versions <- tryCatch({
       res <- processx::run("rig", "list", error_on_status = FALSE, timeout = 5)
       if (res$status == 0) {
-        lines <- strsplit(res$stdout, "\n")[[1]]
+        lines <- trimws(strsplit(res$stdout, "\n")[[1]])
+        lines <- sub("^\\*\\s*", "", lines)  # strip leading star (marks current version)
         trimws(grep("^[0-9]+\\.[0-9]+", lines, value = TRUE))
       } else character(0)
     }, error = function(e) character(0))
@@ -207,7 +208,7 @@ find_routes <- function(search_paths = NULL) {
   candidates <- candidates[fs::file_exists(candidates)]
 
   res_list <- lapply(candidates, function(rscript) {
-    script <- 'cat(paste(R.version$major, R.version$minor, paste(.libPaths(), collapse=";"), sep="|"))'
+    script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
     out <- tryCatch(
       processx::run(rscript, c("--vanilla", "-e", script), timeout = 5, error_on_status = FALSE),
       error = function(e) NULL
@@ -215,15 +216,15 @@ find_routes <- function(search_paths = NULL) {
 
     if (is.null(out) || out$status != 0 || out$timeout) return(NULL)
 
-    parts <- strsplit(trimws(out$stdout), "\\|")[[1]]
+    parts <- strsplit(trimws(out$stdout), "\\|\\|SEP\\|\\|")[[1]]
     if (length(parts) < 3) return(NULL)
 
     list(
-      version = paste(parts[1], parts[2], sep = "."),
-      major = parts[1],
-      minor = parts[2],
+      version = paste(trimws(parts[1]), trimws(parts[2]), sep = "."),
+      major = trimws(parts[1]),
+      minor = trimws(parts[2]),
       rscript_path = rscript,
-      lib_paths = list(strsplit(parts[3], ";")[[1]]),
+      lib_paths = list(strsplit(trimws(parts[3]), "\\|\\|LIB\\|\\|")[[1]]),
       is_current = FALSE
     )
   })
