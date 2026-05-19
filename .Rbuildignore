@@ -13,3 +13,5 @@
 ^\.github$
 ^tmp-.*\.log$
 ^tmp-.*\.R$
+^CRAN-SUBMISSION$
+^cran-comments\.md$
