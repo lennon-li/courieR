@@ -11,6 +11,9 @@ rig_install(version, wait = TRUE)
 
 \item{wait}{Logical}
 }
+\value{
+The result of \code{\link[processx:run]{processx::run()}}.
+}
 \description{
 Install R via rig
 }

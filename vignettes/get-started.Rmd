@@ -11,82 +11,103 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
 ```
 
-courieR moves your installed R packages from an old R version to a new one on the same machine. This vignette walks you through both the dashboard and the programmatic CLI.
+courieR syncs installed R packages between R versions on the same machine. You can migrate from an old version to a new one, keep two versions in parity, or selectively push packages in either direction — all from a point-and-click dashboard or from the R console.
 
 ## Installation
 
-Install courieR on your **new** R version:
+Install courieR on any R version you want to work from (it does not need to be installed on every version it manages):
 
 ```{r}
 remotes::install_github("lennon-li/courieR")
 ```
 
-You do not need to install anything on your old R version.
-
 ## Step 1 — Discover Your R Installations
 
-`find_routes()` scans the system and returns a data frame of every R version it finds:
+`find_routes()` scans the system and returns a data frame of every R version it can find:
 
 ```{r}
 library(courieR)
 
 routes <- find_routes()
 routes[, c("version", "rscript_path", "is_current")]
-#>   version                              rscript_path is_current
-#> 1   4.2.3  C:/Program Files/R/R-4.2.3/bin/Rscript.exe      FALSE
-#> 2   4.4.1  C:/Program Files/R/R-4.4.1/bin/Rscript.exe       TRUE
+#>   version                                           rscript_path is_current
+#> 1   4.6.0         C:/Program Files/R/R-4.6.0/bin/x64/Rscript.exe       TRUE
+#> 2   4.5.2         C:/Program Files/R/R-4.5.2/bin/x64/Rscript.exe      FALSE
+#> 3   4.5.2  C:/Users/you/AppData/Local/Programs/R/R-4.5.2/bin/...      FALSE
+#> 4   4.5.1  C:/Users/you/AppData/Local/Programs/R/R-4.5.1/bin/...      FALSE
+#> 5   4.1.1              C:/Users/you/Documents/R/R-4.1.1/bin/...      FALSE
 ```
 
-`is_current = TRUE` marks the R you are running right now — that is your destination.
+`is_current = TRUE` marks the R you are running right now.
+
+### What gets detected
+
+On **Windows**, `find_routes()` checks the HKLM registry (admin installs), the HKCU registry (non-admin installs via the standard CRAN installer), `%ProgramFiles%\R`, `%LOCALAPPDATA%\Programs\R`, `%USERPROFILE%\Documents\R`, and any versions managed by [rig](https://github.com/r-lib/rig).
+
+On **macOS**, it checks the system R framework (`/Library/Frameworks/R.framework`), the user framework (`~/Library/Frameworks/R.framework`), Homebrew (`/opt/homebrew/opt/r` and `/usr/local/opt/r`), and rig-managed versions.
+
+On **Linux**, it checks `/opt/R` (rig system-wide), `~/.local/share/rig/R` (rig user-local), conda environments, and the system `Rscript` on `$PATH`.
+
+To include a non-standard path, pass it explicitly:
+
+```{r}
+routes <- find_routes(search_paths = "/opt/custom-r/bin/Rscript")
+```
 
 ## Step 2a — Use the Dashboard (Recommended)
-
-Launch the Shiny hub:
 
 ```{r}
 open_hub()
 ```
 
-The dashboard opens in your browser with two tabs:
+The dashboard opens in your browser. At the top, a header bar lists every detected R installation; the two you select are highlighted in amber (A) and teal (B).
 
-**Migrate tab** — the main workflow:
+### Sync tab
 
-1. Select your source (old R) from the From dropdown
-2. Select your destination (new R) from the To dropdown — defaults to current R
-3. Review the package checklist — all packages are selected by default
-4. Click **Deliver** and watch the progress output
+The **Sync** tab is the main workflow:
 
-**Advanced tab** — for inspection and diagnostics:
+1. **Select first installation** — choose your "A" R from the dropdown
+2. **Select second installation** — choose your "B" R
+3. Click **Compare** — a summary strip appears above the table showing how many packages are identical, missing from one side, or at different versions
+4. Review the comparison table (filterable, 50 rows by default)
+5. Click one of the three sync buttons:
+   - **Copy A → B** — installs or upgrades into B every package that A has at a newer or equal version
+   - **Copy B → A** — the reverse
+   - **Two-Way Sync** — brings both installations to full parity
 
-- Manifest: full package list for any R version
-- Delivery Receipt: results of the last ship
-- Diagnostics: raw logs if anything went wrong
+### Advanced tab
+
+The **Advanced** tab gives lower-level access:
+
+- **Packages** — full package list for any selected R, with version and source
+- **Delivery Receipt** — results of the last sync operation
+- **Details** — currently selected source and destination paths
+- **Manifest** — raw package manifest export
 
 ## Step 2b — Use the CLI
 
 Prefer code? `ship()` does the same thing programmatically:
 
 ```{r}
-# always do a dry run first to see the plan
+# always do a dry run first
 result <- ship(
-  source_path = routes$rscript_path[1],   # old R
-  target_path = routes$rscript_path[2],   # new R (current)
+  source_path = routes$rscript_path[2],   # old R
+  target_path = routes$rscript_path[1],   # new R (current)
   dry_run = TRUE
 )
-
-# review what will be installed or upgraded
-print(result$plan[, c("package", "action", "version.x")])
+print(result$plan)
 ```
 
-When you are happy with the plan, run for real:
+When you are happy with the plan, run for real. Pass `upgrade = TRUE` to also update packages that are present but at an older version (this is what the Sync tab does automatically):
 
 ```{r}
 result <- ship(
-  source_path = routes$rscript_path[1],
-  target_path = routes$rscript_path[2]
+  source_path = routes$rscript_path[2],
+  target_path = routes$rscript_path[1],
+  upgrade = TRUE
 )
 
-# check results
+# check for any errors
 result$results[result$results$status == "error", ]
 ```
 
@@ -95,17 +116,17 @@ result$results[result$results$status == "error", ]
 `manifest()` lists packages for any R version. `inventory()` compares two manifests:
 
 ```{r}
-old_pkgs <- manifest(rscript_path = routes$rscript_path[1])
-new_pkgs <- manifest(rscript_path = routes$rscript_path[2])
+a_pkgs <- manifest(rscript_path = routes$rscript_path[1])
+b_pkgs <- manifest(rscript_path = routes$rscript_path[2])
 
-comp <- inventory(old_pkgs, new_pkgs)
-nrow(comp$missing)    # packages in old R but not new R
-nrow(comp$outdated)   # packages where old R has a newer version
+comp <- inventory(a_pkgs, b_pkgs)
+nrow(comp$missing)    # packages in A but not in B
+nrow(comp$outdated)   # packages where A has a newer version than B
 ```
 
 ## Tips
 
 - courieR skips base and recommended packages — only user-installed packages are migrated
 - If a package fails to install, check `result$results` for the error message
-- CRAN packages are reinstalled fresh from CRAN; GitHub packages are detected and sourced via pak
-- Run `find_routes(search_paths = "C:/custom/R")` to include non-standard install locations
+- CRAN packages are reinstalled fresh from CRAN; packages installed from other sources (GitHub, Bioconductor) are detected and sourced via pak
+- The Sync tab comparison table supports column-level filtering — use the filter boxes under each header to narrow to specific packages or statuses

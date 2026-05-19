@@ -7,6 +7,14 @@
 #' @param upgrade Logical. Passed to pak
 #' @param ... Extra arguments
 #' @return A list with shipment results
+#' @section Safety:
+#' `ship()` installs packages into the target R library via [pak::pkg_install()]
+#' running in a subprocess. Set `dry_run = TRUE` to preview the migration plan
+#' without installing anything. When `dry_run = FALSE` (the default), pak
+#' from the current R session is used to install into the target library, which
+#' is the correct design for a migration tool (the source R need not have pak
+#' installed). All subprocess calls are confined to the target library path; no
+#' files are written outside the target library or the R temporary directory.
 #' @examples
 #' \dontrun{
 #'   routes <- find_routes()
@@ -68,8 +76,14 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   }
 
   tgt_lib_script <- "cat(.libPaths()[1])"
-  tgt_lib_res <- processx::run(target_path, c("--vanilla", "-e", tgt_lib_script))
+  tgt_lib_res <- processx::run(target_path, c("--vanilla", "-e", tgt_lib_script), error_on_status = FALSE)
   tgt_lib <- trimws(tgt_lib_res$stdout)
+  if (tgt_lib_res$status != 0 || !nzchar(tgt_lib)) {
+    cli::cli_abort(
+      "Could not determine target library path (exit {tgt_lib_res$status}). stderr: {tgt_lib_res$stderr}",
+      class = "courieR_subprocess_error"
+    )
+  }
 
   specs <- plan$pak_spec
 

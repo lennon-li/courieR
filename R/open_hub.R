@@ -3,6 +3,7 @@
 #' @param project_path Optional path to pre-fill in the app
 #' @param port Optional port to run the app on
 #' @param launch.browser Logical. Whether to open the browser
+#' @return Called for its side effect of launching a Shiny application.
 #' @examples
 #' \dontrun{
 #'   open_hub()

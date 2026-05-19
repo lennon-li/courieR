@@ -13,6 +13,9 @@ open_hub(project_path = NULL, port = NULL, launch.browser = TRUE)
 
 \item{launch.browser}{Logical. Whether to open the browser}
 }
+\value{
+Called for its side effect of launching a Shiny application.
+}
 \description{
 Launch the courieR delivery hub dashboard
 }

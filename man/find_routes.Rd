@@ -7,17 +7,74 @@
 find_routes(search_paths = NULL)
 }
 \arguments{
-\item{search_paths}{Optional extra paths to search}
+\item{search_paths}{An optional character vector of additional paths to
+search. Each element may be a directory containing \code{bin/Rscript} (or
+\code{bin/x64/Rscript.exe} on Windows), or a direct path to an \code{Rscript}
+executable.}
 }
 \value{
-A data.frame of R installations
+A data frame with one row per unique R installation and the
+following columns:
+\describe{
+\item{version}{Character. R version string, e.g. \code{"4.4.1"}.}
+\item{rscript_path}{Character. Absolute path to the \code{Rscript} executable.}
+\item{is_current}{Logical. \code{TRUE} for the R session running courieR.}
+\item{source}{Character. Detection source label (e.g. \code{"registry-hklm"},
+\code{"registry-hkcu"}, \code{"programfiles"}, \code{"appdata"}, \code{"documents"},
+\code{"homebrew"}, \code{"rig"}, \code{"search_paths"}).}
+}
 }
 \description{
-Detect R installations on the system
+Scans the current machine for every R installation it can find, across
+multiple sources per platform, and returns a tidy data frame of results.
+}
+\details{
+Detection sources by platform:
+
+\strong{Windows}
+\itemize{
+\item HKLM registry (\verb{SOFTWARE\\R-core\\R}) — standard admin installs via
+the CRAN Windows installer.
+\item HKCU registry (\verb{SOFTWARE\\R-core\\R}) — non-admin installs that
+register under the current user hive only.
+\item \verb{\%ProgramFiles\%\\R} — directory scan for admin installs not in the
+registry.
+\item \verb{\%LOCALAPPDATA\%\\Programs\\R} — rig-managed and other user-local
+installs.
+\item \verb{\%USERPROFILE\%\\Documents\\R} — installs placed in the user's
+Documents folder.
+\item rig (\verb{rig list}) — any additional versions managed by rig that
+were not found by path scanning.
+}
+
+\strong{macOS}
+\itemize{
+\item \verb{/Library/Frameworks/R.framework/Versions} — system-wide CRAN
+installer.
+\item \verb{~/Library/Frameworks/R.framework/Versions} — user-local framework
+installs (no admin required).
+\item Homebrew: \verb{/opt/homebrew/opt/r} (Apple Silicon) and
+\verb{/usr/local/opt/r} (Intel).
+\item rig (\verb{rig list}) — rig-managed versions.
+}
+
+\strong{Linux}
+\itemize{
+\item \verb{/opt/R} — rig system-wide installs.
+\item \verb{~/.local/share/rig/R} — rig user-local installs.
+\item conda environments (active \verb{$CONDA_PREFIX}).
+\item System \code{Rscript} on \verb{$PATH}.
+}
+
+Symlinks are resolved via \code{fs::path_real()} so that duplicate entries from
+different detection sources pointing to the same executable are collapsed.
 }
 \examples{
 \dontrun{
-  r <- find_routes()
-  print(r$version)
+routes <- find_routes()
+routes[, c("version", "rscript_path", "is_current")]
+
+# include a non-standard install
+routes <- find_routes(search_paths = "/opt/custom-r/bin/Rscript")
 }
 }

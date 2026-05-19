@@ -25,10 +25,10 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
     cli::cli_abort("Rscript not found at {.path {rscript_path}}", class = "courieR_rscript_not_found")
   }
 
-  script_file <- fs::path_temp("courieR_manifest.R")
+  script_file <- tempfile(pattern = "courieR_manifest_", fileext = ".R")
   on.exit(if (fs::file_exists(script_file)) fs::file_delete(script_file), add = TRUE)
 
-  lib_arg <- if (is.null(lib_path)) "NULL" else paste0("'", lib_path, "'")
+  lib_arg <- if (is.null(lib_path)) "NULL" else deparse(lib_path)
 
   script_content <- paste0('
 suppressPackageStartupMessages({
@@ -38,7 +38,7 @@ suppressPackageStartupMessages({
     stringsAsFactors = FALSE
   )
   if (nrow(pkgs) == 0) {
-    cat("[]")
+    cat("__COURIERS_MANIFEST_START__\n[]\n__COURIERS_MANIFEST_END__\n")
     q("no", status = 0)
   }
   pkgs$source <- ifelse(!is.na(pkgs$Repository) & grepl("CRAN", pkgs$Repository), "CRAN",
@@ -47,13 +47,18 @@ suppressPackageStartupMessages({
 
   names(pkgs) <- tolower(names(pkgs))
 
+  keep_cols <- intersect(c("package", "version", "priority", "repository", "remotetype", "libpath", "source"), names(pkgs))
+  pkgs <- pkgs[, keep_cols, drop = FALSE]
+
+  cat("__COURIERS_MANIFEST_START__\n")
   if (requireNamespace("jsonlite", quietly = TRUE)) {
     cat(jsonlite::toJSON(pkgs, auto_unbox = TRUE, na = "null"))
   } else {
-    cat("CSV_START\\n")
-    write.csv(pkgs, row.names = FALSE, na = "")
-    cat("\\nCSV_END\\n")
+    cat("CSV_START\n")
+    write.csv(pkgs, row.names = FALSE, na = "", eol = "\n")
+    cat("CSV_END\n")
   }
+  cat("\n__COURIERS_MANIFEST_END__\n")
 })
 ')
 
@@ -87,11 +92,25 @@ suppressPackageStartupMessages({
     cli::cli_abort("Subprocess exited with status {res$status}", class = "courieR_subprocess_error")
   }
 
-  out_text <- trimws(res$stdout)
+  raw_stdout <- res$stdout
+
+  inner <- sub(
+    "(?s).*__COURIERS_MANIFEST_START__\r?\n(.*?)\r?\n__COURIERS_MANIFEST_END__.*",
+    "\\1", raw_stdout, perl = TRUE
+  )
+  if (identical(inner, raw_stdout)) {
+    cli::cli_abort(
+      "Manifest subprocess output did not contain expected sentinels. stderr: {res$stderr}",
+      class = "courieR_subprocess_error"
+    )
+  }
+  out_text <- trimws(inner)
 
   parsed <- NULL
   if (grepl("^CSV_START", out_text)) {
-    csv_str <- sub(".*CSV_START\n(.*?)\nCSV_END.*", "\\1", out_text)
+    csv_str <- sub("(?s).*?CSV_START\r?\n(.*?)\r?\nCSV_END.*", "\\1", out_text, perl = TRUE)
+    csv_str <- gsub("\r\n", "\n", csv_str, fixed = TRUE)
+    csv_str <- gsub("\r", "\n", csv_str, fixed = TRUE)
     parsed <- read.csv(text = csv_str, stringsAsFactors = FALSE)
   } else {
     parsed <- tryCatch(
