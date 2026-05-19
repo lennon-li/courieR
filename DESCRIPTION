@@ -3,7 +3,7 @@ Type: Package
 Title: Migrate Installed R Packages Between R Versions
 Version: 0.2.0
 Authors@R:
-    person("Lennon", "Li", , "lennon.yeli@gmail.com", role = c("aut", "cre"))
+    person("Lennon", "Li", , "yeli@biostats.ai", role = c("aut", "cre"))
 Description: Detects all R installations on the current machine and migrates
     installed R packages between them. Provides find_routes() to discover R
     versions, manifest() to scan package libraries via subprocess, inventory()
