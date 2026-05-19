@@ -569,3 +569,167 @@ body {
   color: #15606a;
   border-color: #7fc8d1;
 }
+
+/* ── Progress overlay (withProgress) ──────────────────────────────── */
+.shiny-progress-container {
+  background-color: rgba(18, 40, 60, 0.38) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.shiny-progress {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: #ffffff !important;
+  border-radius: 20px !important;
+  padding: 2rem 2.5rem !important;
+  box-shadow: 0 24px 64px rgba(15, 45, 67, 0.24), 0 4px 16px rgba(15, 45, 67, 0.10) !important;
+  border: 1.5px solid #d0e4f0 !important;
+  min-width: 300px !important;
+  max-width: 420px !important;
+  text-align: center;
+  z-index: 9999 !important;
+}
+
+.shiny-progress .detail {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: #183247 !important;
+  margin-bottom: 0.9rem !important;
+  margin-top: 0 !important;
+}
+
+.shiny-progress .progress {
+  height: 6px !important;
+  border-radius: 6px !important;
+  background: #edf3f8 !important;
+  overflow: hidden !important;
+}
+
+.shiny-progress .progress-bar,
+.shiny-progress .bar {
+  background: linear-gradient(90deg, #5f4ab4 0%, #8a52c8 100%) !important;
+  animation: progress-slide 1.4s ease-in-out infinite !important;
+  width: 45% !important;
+}
+
+@keyframes progress-slide {
+  0%   { margin-left: -50%; }
+  100% { margin-left: 110%; }
+}
+
+/* ── Update module ─────────────────────────────────────────────────── */
+.advanced-update-card-a .card-header {
+  background: linear-gradient(90deg, #fff0e4 0%, #fffaf4 100%);
+  color: #9a4b17;
+}
+
+.advanced-update-card-b .card-header {
+  background: linear-gradient(90deg, #e3f5f7 0%, #f3fbfc 100%);
+  color: #15606a;
+}
+
+.update-btn-wrap {
+  margin-top: 1.25rem;
+}
+
+.update-btn {
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  font-weight: 700;
+  border-radius: 14px;
+  border: 1.5px solid;
+  font-size: 0.93rem;
+  transition: background 0.13s, border-color 0.13s, color 0.13s;
+}
+
+.update-btn-a {
+  background: #fff4ec;
+  border-color: #e09050;
+  color: #7a3510;
+}
+.update-btn-a:hover {
+  background: #ffe8d5;
+  border-color: #d8752a;
+  color: #6a2e0e;
+}
+
+.update-btn-b {
+  background: #e8f9fa;
+  border-color: #50aebb;
+  color: #0f5060;
+}
+.update-btn-b:hover {
+  background: #d5f3f6;
+  border-color: #1f8d9b;
+  color: #0a3e4a;
+}
+
+.update-path-badge {
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.update-path-badge-a {
+  background: #fff6ef;
+  border: 1px solid #f0b07b;
+  color: #7a3510;
+}
+
+.update-path-badge-b {
+  background: #edfafb;
+  border: 1px solid #7fc8d1;
+  color: #0f5060;
+}
+
+.update-no-selection {
+  color: #7a95a8;
+  font-size: 0.9rem;
+  font-style: italic;
+  margin: 0;
+}
+
+.update-modal-warning {
+  background: #fff8f0;
+  border: 1px solid #f0b07b;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.update-modal-warning-list {
+  margin: 0.4rem 0 0.4rem 1rem;
+  padding: 0;
+  font-size: 0.88rem;
+}
+
+.update-modal-warning-pkgs {
+  color: #6a5540;
+  font-size: 0.82rem;
+  font-family: monospace;
+  margin: 0.4rem 0 0.25rem;
+  word-break: break-word;
+}
+
+.update-modal-warning-note {
+  color: #7a6550;
+  font-size: 0.82rem;
+  margin: 0.5rem 0 0;
+  font-style: italic;
+}
+
+/* ── Packages tab picker ───────────────────────────────────────────── */
+.origin-picker-wrap {
+  margin-bottom: 1rem;
+}
+
+.origin-picker-wrap select.form-control {
+  border-radius: 14px !important;
+  border: 1px solid #d5e3ee !important;
+  background: #ffffff;
+  padding: 0.6rem 0.9rem;
+}

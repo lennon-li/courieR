@@ -70,4 +70,5 @@ server <- function(input, output, session) {
   mod_receipt_server("results", migration_log)
   mod_manifest_server("report", from_r_path, to_r_path, migration_log)
   mod_sync_server("sync", from_r_path, to_r_path)
+  mod_update_server("update", from_r_path, to_r_path)
 }
