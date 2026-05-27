@@ -32,8 +32,8 @@ rig_list <- function() {
 #' @param wait Logical
 #' @return The result of [processx::run()].
 #' @examples
-#' \dontrun{
-#'   rig_install("4.5.0")
+#' if (interactive() && rig_available()) {
+#'   rig_install("4.5.0", wait = FALSE)
 #' }
 #' @export
 rig_install <- function(version, wait = TRUE) {

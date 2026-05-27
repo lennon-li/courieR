@@ -5,7 +5,7 @@
 #' @param launch.browser Logical. Whether to open the browser
 #' @return Called for its side effect of launching a Shiny application.
 #' @examples
-#' \dontrun{
+#' if (interactive()) {
 #'   open_hub()
 #' }
 #' @export

@@ -33,7 +33,7 @@ A list with process info
 Run an R command in the background and log output
 }
 \examples{
-\dontrun{
+\donttest{
   tmp <- tempdir()
   job <- dispatch(tmp, "message('hello')", "baseline", "document")
   Sys.sleep(1)

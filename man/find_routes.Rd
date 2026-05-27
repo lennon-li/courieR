@@ -70,7 +70,7 @@ Symlinks are resolved via \code{fs::path_real()} so that duplicate entries from
 different detection sources pointing to the same executable are collapsed.
 }
 \examples{
-\dontrun{
+\donttest{
 routes <- find_routes()
 routes[, c("version", "rscript_path", "is_current")]
 

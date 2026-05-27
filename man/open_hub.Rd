@@ -20,7 +20,7 @@ Called for its side effect of launching a Shiny application.
 Launch the courieR delivery hub dashboard
 }
 \examples{
-\dontrun{
+if (interactive()) {
   open_hub()
 }
 }

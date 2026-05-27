@@ -44,7 +44,7 @@ files are written outside the target library or the R temporary directory.
 }
 
 \examples{
-\dontrun{
+\donttest{
   routes <- find_routes()
   if (nrow(routes) >= 2) {
     result <- ship(

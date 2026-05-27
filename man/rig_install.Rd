@@ -18,7 +18,7 @@ The result of \code{\link[processx:run]{processx::run()}}.
 Install R via rig
 }
 \examples{
-\dontrun{
-  rig_install("4.5.0")
+if (interactive() && rig_available()) {
+  rig_install("4.5.0", wait = FALSE)
 }
 }

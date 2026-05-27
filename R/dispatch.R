@@ -8,7 +8,7 @@
 #' @param timeout_sec Timeout in seconds
 #' @return A list with process info
 #' @examples
-#' \dontrun{
+#' \donttest{
 #'   tmp <- tempdir()
 #'   job <- dispatch(tmp, "message('hello')", "baseline", "document")
 #'   Sys.sleep(1)
