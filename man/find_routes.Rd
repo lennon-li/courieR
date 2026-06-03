@@ -19,9 +19,6 @@ following columns:
 \item{version}{Character. R version string, e.g. \code{"4.4.1"}.}
 \item{rscript_path}{Character. Absolute path to the \code{Rscript} executable.}
 \item{is_current}{Logical. \code{TRUE} for the R session running courieR.}
-\item{source}{Character. Detection source label (e.g. \code{"registry-hklm"},
-\code{"registry-hkcu"}, \code{"programfiles"}, \code{"appdata"}, \code{"documents"},
-\code{"homebrew"}, \code{"rig"}, \code{"search_paths"}).}
 }
 }
 \description{

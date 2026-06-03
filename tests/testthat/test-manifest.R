@@ -1,4 +1,5 @@
 test_that("manifest returns correct format", {
+  skip_on_cran()
   res <- manifest(format = "data.table", timeout_sec = 120L)
   expect_s3_class(res, "data.table")
   expect_true("package" %in% names(res))
@@ -7,6 +8,7 @@ test_that("manifest returns correct format", {
 })
 
 test_that("manifest returns data.frame when requested", {
+  skip_on_cran()
   res <- manifest(format = "data.frame", timeout_sec = 120L)
   expect_s3_class(res, "data.frame")
   expect_true("package" %in% names(res))
@@ -29,6 +31,7 @@ test_that("manifest handles empty library gracefully", {
 })
 
 test_that("manifest temp file is cleaned up", {
+  skip_on_cran()
   tmpfiles_before <- length(fs::dir_ls(tempdir(), glob = "courieR_manifest*"))
   res <- manifest(timeout_sec = 120L)
   tmpfiles_after <- length(fs::dir_ls(tempdir(), glob = "courieR_manifest*"))

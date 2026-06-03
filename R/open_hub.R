@@ -10,6 +10,18 @@
 #' }
 #' @export
 open_hub <- function(project_path = NULL, port = NULL, launch.browser = TRUE) {
+  missing_pkgs <- Filter(
+    function(p) !requireNamespace(p, quietly = TRUE),
+    c("shiny", "bslib", "bsicons", "DT")
+  )
+  if (length(missing_pkgs) > 0) {
+    cli::cli_abort(c(
+      "The courieR dashboard requires additional packages that are not installed.",
+      "i" = "Install them with: {.code install.packages(c({paste(shQuote(missing_pkgs), collapse = ', ')}))}",
+      "i" = "The CLI workflow ({.fn find_routes}, {.fn manifest}, {.fn inventory}, {.fn ship}) works without these packages."
+    ))
+  }
+
   app_dir <- system.file("app", package = "courieR")
   if (app_dir == "") {
     cli::cli_abort("Could not find app directory. Try re-installing courieR.")

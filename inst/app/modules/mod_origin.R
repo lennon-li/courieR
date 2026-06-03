@@ -19,7 +19,7 @@ mod_origin_ui <- function(id) {
   )
 }
 
-mod_origin_server <- function(id, from_r_path = NULL) {
+mod_origin_server <- function(id, from_r_path = NULL, push_error = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     routes_rv  <- reactiveVal(NULL)
@@ -90,6 +90,7 @@ mod_origin_server <- function(id, from_r_path = NULL) {
         courieR::manifest(rscript_path = input$selected_path),
         error = function(e) {
           showNotification(paste("Failed to load packages:", e$message), type = "error")
+          if (is.function(push_error)) push_error(e$message, context = "Loading package list")
           NULL
         }
       )

@@ -32,7 +32,7 @@ inspect_shipment <- function(project_path) {
     character()
   }
 
-  app_files <- as.character(fs::dir_ls(project_path, glob = "app.R|ui.R|server.R", recurse = TRUE, type = "file"))
+  app_files <- as.character(fs::dir_ls(project_path, regexp = "(^|/)(app|ui|server)\\.R$", recurse = TRUE, type = "file"))
   has_shiny <- length(app_files) > 0 || fs::dir_exists(fs::path(project_path, "inst", "app"))
 
   quarto_files <- as.character(fs::dir_ls(project_path, glob = "*.qmd", recurse = TRUE, type = "file"))

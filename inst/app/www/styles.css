@@ -733,3 +733,18 @@ body {
   background: #ffffff;
   padding: 0.6rem 0.9rem;
 }
+
+/* ── Error reporter modal ──────────────────────────────────────────── */
+.error-reporter-msg {
+  background: #fff3f3;
+  border: 1px solid #f5c2c7;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.83rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  color: #721c24;
+  margin-bottom: 0.5rem;
+}

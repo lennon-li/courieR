@@ -4,6 +4,13 @@ server <- function(input, output, session) {
   migration_log <- reactiveVal(NULL)
   routes_cache  <- reactiveVal(NULL)
 
+  # ── Error reporter ──────────────────────────────────────────────────
+  error_rv <- reactiveVal(NULL)
+  push_error <- function(message, context = NULL) {
+    error_rv(list(message = message, context = context, ts = Sys.time()))
+  }
+  mod_error_reporter_server("reporter", error_rv)
+
   session$onFlushed(function() {
     r <- tryCatch(sort_routes(courieR::find_routes()), error = function(e) NULL)
     routes_cache(r)
@@ -66,9 +73,9 @@ server <- function(input, output, session) {
     )
   })
 
-  mod_origin_server("env", from_r_path)
+  mod_origin_server("env", from_r_path, push_error = push_error)
   mod_receipt_server("results", migration_log)
   mod_manifest_server("report", from_r_path, to_r_path, migration_log)
-  mod_sync_server("sync", from_r_path, to_r_path)
-  mod_update_server("update", from_r_path, to_r_path)
+  mod_sync_server("sync", from_r_path, to_r_path, push_error = push_error)
+  mod_update_server("update", from_r_path, to_r_path, push_error = push_error)
 }
