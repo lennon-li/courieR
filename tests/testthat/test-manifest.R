@@ -22,6 +22,7 @@ test_that("manifest errors on invalid Rscript path", {
 })
 
 test_that("manifest handles empty library gracefully", {
+  skip_on_cran()
   # Create temp empty library and scan it
   empty_lib <- withr::local_tempdir("emptylib")
   res <- manifest(lib_path = empty_lib, timeout_sec = 30L)
