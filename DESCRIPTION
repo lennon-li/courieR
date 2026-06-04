@@ -1,7 +1,7 @@
 Package: courieR
 Type: Package
 Title: Migrate Installed R Packages Between R Versions
-Version: 0.2.1
+Version: 0.2.2
 Authors@R:
     person("Lennon", "Li", , "yeli@biostats.ai", role = c("aut", "cre"))
 Description: Detects all R installations on the current machine and migrates
