@@ -38,7 +38,7 @@ mod_sync_ui <- function(id) {
   )
 }
 
-mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL) {
+mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, push_error = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending_sync    <- reactiveVal(NULL)
@@ -207,6 +207,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL) {
         }
       }, error = function(e) {
         showNotification(paste("Route scan failed:", e$message), type = "error")
+        if (is.function(push_error)) push_error(e$message, context = "Detecting R installations")
       })
       detecting(FALSE)
     }
@@ -306,11 +307,17 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL) {
         return()
       }
 
-      withProgress(message = "Comparing R libraries...", {
-        a_pkgs <- courieR::manifest(rscript_path = a_path)
-        b_pkgs <- courieR::manifest(rscript_path = b_path)
-        comparison_data(build_sync_comparison(a_pkgs, b_pkgs))
-      })
+      tryCatch(
+        withProgress(message = "Comparing R libraries...", {
+          a_pkgs <- courieR::manifest(rscript_path = a_path)
+          b_pkgs <- courieR::manifest(rscript_path = b_path)
+          comparison_data(build_sync_comparison(a_pkgs, b_pkgs))
+        }),
+        error = function(e) {
+          showNotification(paste("Comparison failed:", e$message), type = "error", duration = NULL)
+          if (is.function(push_error)) push_error(e$message, context = "Comparing R libraries")
+        }
+      )
     })
 
     sync_comparison <- reactive({
@@ -534,7 +541,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL) {
           }
         }),
         error = function(e) {
-          showNotification(paste("Error:", e$message), type = "error", duration = NULL)
+          showNotification(paste("Sync failed:", e$message), type = "error", duration = NULL)
+          if (is.function(push_error)) push_error(e$message, context = "Syncing packages")
           NULL
         }
       )

@@ -27,7 +27,7 @@ mod_update_ui <- function(id) {
   )
 }
 
-mod_update_server <- function(id, install_a_path, install_b_path) {
+mod_update_server <- function(id, install_a_path, install_b_path, push_error = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending <- reactiveVal(NULL)
@@ -59,6 +59,7 @@ mod_update_server <- function(id, install_a_path, install_b_path) {
         }),
         error = function(e) {
           showNotification(paste("Scan failed:", e$message), type = "error")
+          if (is.function(push_error)) push_error(e$message, context = "Scanning packages for update")
           NULL
         }
       )
@@ -158,6 +159,7 @@ mod_update_server <- function(id, install_a_path, install_b_path) {
         TRUE
       }, error = function(e) {
         showNotification(paste("Update failed:", e$message), type = "error", duration = NULL)
+        if (is.function(push_error)) push_error(e$message, context = "Updating packages")
         FALSE
       })
 

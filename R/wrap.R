@@ -20,7 +20,8 @@ wrap <- function(package, version = NULL, source_hint = NULL, github_ref = NULL)
     return(paste0("bioc::", package))
   }
 
-  if (!is.null(source_hint) && source_hint == "GitHub" && !is.null(github_ref)) {
+  if (!is.null(source_hint) && source_hint == "GitHub" &&
+      !is.null(github_ref) && !is.na(github_ref) && nzchar(github_ref)) {
     return(github_ref)
   }
 

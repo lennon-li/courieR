@@ -52,11 +52,23 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   }
 
   if (nrow(plan) > 0) {
+    # Reconstruct GitHub refs from RemoteUsername/RemoteRepo captured by manifest()
+    u_col <- intersect(c("remoteusername.x", "remoteusername"), names(plan))[1]
+    r_col <- intersect(c("remoterepo.x",    "remoterepo"),    names(plan))[1]
+    github_refs <- if (!is.na(u_col) && !is.na(r_col)) {
+      u <- plan[[u_col]]; r <- plan[[r_col]]
+      ifelse(!is.na(u) & nzchar(u) & !is.na(r) & nzchar(r), paste0(u, "/", r), NA_character_)
+    } else {
+      rep(NA_character_, nrow(plan))
+    }
+
     plan$pak_spec <- mapply(
       wrap,
-      package = plan$package,
-      version = plan$version.x,
-      source_hint = plan$source
+      package     = plan$package,
+      version     = plan$version.x,
+      source_hint = plan$source,
+      github_ref  = github_refs,
+      SIMPLIFY    = TRUE
     )
   } else {
     plan$pak_spec <- character()
@@ -66,7 +78,7 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
 
   if (dry_run || nrow(plan) == 0) {
     res <- list(
-      comparison = comp,
+      comparison = comp$comparison,
       plan = plan,
       results = results,
       dry_run = dry_run,
@@ -102,20 +114,41 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   tgt_pkgs_after <- manifest(rscript_path = target_path, format = "data.table")
 
   if (nrow(plan) > 0) {
-    results_list <- lapply(plan$package, function(pkg) {
+    results_list <- lapply(seq_len(nrow(plan)), function(i) {
+      pkg       <- plan$package[i]
+      action    <- plan$action[i]
       after_pkg <- tgt_pkgs_after[tgt_pkgs_after$package == pkg, ]
-      if (nrow(after_pkg) > 0) {
-        list(package = pkg, status = "success", message = "Installed")
+
+      if (action == "install") {
+        if (nrow(after_pkg) > 0) {
+          list(package = pkg, status = "success", message = "Installed")
+        } else {
+          msg <- if (pak_res$status == "error") conditionMessage(pak_res$error) else "Not found after install"
+          list(package = pkg, status = "error", message = msg)
+        }
       } else {
-        msg <- if (pak_res$status == "error") pak_res$error$message else "Not found after install"
-        list(package = pkg, status = "error", message = msg)
+        # upgrade: the package was already present; success only if version actually changed
+        old_ver   <- plan$version.y[i]
+        after_ver <- if (nrow(after_pkg) > 0) after_pkg$version[1] else NA_character_
+        if (!is.na(after_ver) && (is.na(old_ver) || after_ver != old_ver)) {
+          list(package = pkg, status = "success", message = "Upgraded")
+        } else {
+          msg <- if (pak_res$status == "error") {
+            conditionMessage(pak_res$error)
+          } else if (!is.na(after_ver)) {
+            sprintf("Version unchanged (%s)", after_ver)
+          } else {
+            "Package missing after upgrade attempt"
+          }
+          list(package = pkg, status = "error", message = msg)
+        }
       }
     })
     results <- data.table::rbindlist(results_list)
   }
 
   res <- list(
-    comparison = comp,
+    comparison = comp$comparison,
     plan = plan,
     results = results,
     dry_run = dry_run,

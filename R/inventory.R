@@ -52,9 +52,13 @@ inventory <- function(source_pkgs, target_pkgs) {
     target_status <- rep("same", length(has_target))
     target_status[vx > vy] <- "outdated"
     target_status[vy > vx] <- "newer"
-    # Non-parseable versions default to "missing"-like handling: mark as outdated
-    # so they get included in the install plan
-    target_status[!valid_ver] <- "outdated"
+    # For non-parseable versions: only force "outdated" when source has a version
+    # and target doesn't. When both are empty (e.g. local dev package on both
+    # sides), leave as "same" to avoid an infinite reinstall loop.
+    src_has_ver <- nzchar(vx_str) & !valid_ver
+    tgt_has_ver <- nzchar(vy_str) & !valid_ver
+    target_status[src_has_ver & !tgt_has_ver] <- "outdated"
+    target_status[tgt_has_ver & !src_has_ver] <- "newer"
     status[has_target] <- target_status
   }
   data.table::set(dt, j = "status", value = status)

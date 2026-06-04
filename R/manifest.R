@@ -34,7 +34,7 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
 suppressPackageStartupMessages({
   pkgs <- as.data.frame(
     installed.packages(lib.loc = ', lib_arg, ',
-                       fields = c("Package","Version","Priority","Repository","RemoteType")),
+                       fields = c("Package","Version","Priority","Repository","RemoteType","RemoteUsername","RemoteRepo")),
     stringsAsFactors = FALSE
   )
   if (nrow(pkgs) == 0) {
@@ -47,7 +47,7 @@ suppressPackageStartupMessages({
 
   names(pkgs) <- tolower(names(pkgs))
 
-  keep_cols <- intersect(c("package", "version", "priority", "repository", "remotetype", "libpath", "source"), names(pkgs))
+  keep_cols <- intersect(c("package", "version", "priority", "repository", "remotetype", "remoteusername", "remoterepo", "libpath", "source"), names(pkgs))
   pkgs <- pkgs[, keep_cols, drop = FALSE]
 
   cat("__COURIERS_MANIFEST_START__\n")

@@ -6,7 +6,10 @@ ui <- bslib::page_navbar(
   ),
   window_title = "courieR",
   theme = bslib::bs_theme(version = 5, preset = "shiny"),
-  header = tags$head(tags$link(rel = "stylesheet", href = "styles.css")),
+  header = tagList(
+    tags$head(tags$link(rel = "stylesheet", href = "styles.css")),
+    mod_error_reporter_ui("reporter")
+  ),
 
   bslib::nav_panel(
     "Sync",

@@ -14,9 +14,6 @@
 #'     \item{version}{Character. R version string, e.g. `"4.4.1"`.}
 #'     \item{rscript_path}{Character. Absolute path to the `Rscript` executable.}
 #'     \item{is_current}{Logical. `TRUE` for the R session running courieR.}
-#'     \item{source}{Character. Detection source label (e.g. `"registry-hklm"`,
-#'       `"registry-hkcu"`, `"programfiles"`, `"appdata"`, `"documents"`,
-#'       `"homebrew"`, `"rig"`, `"search_paths"`).}
 #'   }
 #'
 #' @details
@@ -200,7 +197,13 @@ find_routes <- function(search_paths = NULL) {
     if (os == "windows") {
       candidates <- c(candidates, windows_rscript_paths(search_paths))
     } else {
-      candidates <- c(candidates, fs::path(search_paths, "bin", "Rscript"))
+      for (sp in as.character(search_paths)) {
+        if (grepl("[Rr]script$", sp)) {
+          candidates <- c(candidates, sp)
+        } else {
+          candidates <- c(candidates, fs::path(sp, "bin", "Rscript"))
+        }
+      }
     }
   }
 
@@ -220,12 +223,9 @@ find_routes <- function(search_paths = NULL) {
     if (length(parts) < 3) return(NULL)
 
     list(
-      version = paste(trimws(parts[1]), trimws(parts[2]), sep = "."),
-      major = trimws(parts[1]),
-      minor = trimws(parts[2]),
+      version      = paste(trimws(parts[1]), trimws(parts[2]), sep = "."),
       rscript_path = rscript,
-      lib_paths = list(strsplit(trimws(parts[3]), "\\|\\|LIB\\|\\|")[[1]]),
-      is_current = FALSE
+      is_current   = FALSE
     )
   })
 
@@ -233,8 +233,8 @@ find_routes <- function(search_paths = NULL) {
 
   if (length(res_list) == 0) {
     return(data.frame(
-      version = character(), major = character(), minor = character(),
-      rscript_path = character(), is_current = logical()
+      version = character(), rscript_path = character(), is_current = logical(),
+      stringsAsFactors = FALSE
     ))
   }
 
