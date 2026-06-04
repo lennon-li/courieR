@@ -1,4 +1,6 @@
 test_that("ship dry_run works", {
+  skip_if_not_installed("mockery")
+
   mockery::stub(ship, "manifest", function(...) data.table::data.table())
   mockery::stub(ship, "inventory", function(...) {
     list(
@@ -18,6 +20,8 @@ test_that("ship dry_run works", {
 })
 
 test_that("ship package filtering works", {
+  skip_if_not_installed("mockery")
+
   mockery::stub(ship, "manifest", function(...) data.table::data.table())
   mockery::stub(ship, "inventory", function(...) {
     list(
@@ -34,6 +38,8 @@ test_that("ship package filtering works", {
 })
 
 test_that("ship empty plan returns early", {
+  skip_if_not_installed("mockery")
+
   mockery::stub(ship, "manifest", function(...) data.table::data.table())
   mockery::stub(ship, "inventory", function(...) {
     list(
@@ -58,6 +64,8 @@ test_that("ship errors on nonexistent source path", {
 })
 
 test_that("ship errors on nonexistent target path", {
+  skip_if_not_installed("mockery")
+
   mockery::stub(ship, "fs::file_exists", function(path) {
     grepl("src", path)  # only source exists
   })
