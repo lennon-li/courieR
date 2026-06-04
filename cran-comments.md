@@ -1,14 +1,20 @@
-## Resubmission (0.2.1)
+## Resubmission (0.2.2)
 
 This is a resubmission addressing feedback from the CRAN MKL supplementary check
 and fixing correctness issues found during review.
 
+### Changes since 0.2.1
+
+* Added `skip_on_cran()` to the remaining `manifest()` test in `test-manifest.R`
+  that still spawned a subprocess on CRAN (`manifest handles empty library gracefully`).
+  This completes the CRAN-side guarding of all tests that execute `manifest()`.
+
 ### Changes since 0.2.0
 
-* Added `skip_on_cran()` to three tests in `test-manifest.R` that call `manifest()`
-  with the default library path. These tests spawn a subprocess to scan the full
-  installed library, which is too slow and environment-dependent for CRAN check
-  machines (caused 3 test failures on the MKL Fedora supplementary check).
+* Added `skip_on_cran()` to all tests in `test-manifest.R` that call `manifest()`.
+  These tests spawn a subprocess to scan R libraries, which is too slow and
+  environment-dependent for CRAN check machines (caused 3 test failures on the
+  MKL Fedora supplementary check).
 
 * Fixed 8 correctness bugs in the core API (inspect_shipment, manifest, wrap, ship,
   find_routes, inventory) found during pre-release code review.
@@ -48,6 +54,8 @@ There are no reverse dependencies.
   external tools (rig) or subprocess calls that are safe but slow.
 * `manifest()` runs package scanning in a subprocess. The subprocess script is
   assembled and written to a temp file which is cleaned via `on.exit()`.
+* Tests that execute `manifest()` are skipped on CRAN because subprocess stdout/stderr
+  handling can be environment-dependent on supplementary check machines.
 * `ship()` uses `pak::pkg_install()` from the current R session to install into the
   target library. This is intentional: the source R need not have pak installed.
   When `dry_run = TRUE`, no installation occurs.
