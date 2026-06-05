@@ -570,6 +570,35 @@ body {
   border-color: #7fc8d1;
 }
 
+.sync-log {
+  margin-top: 1rem;
+  border: 1px solid #d9e5ec;
+  background: #fbfdff;
+  border-radius: 8px;
+  padding: 0.8rem 0.9rem;
+}
+
+.sync-log-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #274158;
+  margin-bottom: 0.45rem;
+}
+
+.sync-log pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #183247;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 /* ── Progress overlay (withProgress) ──────────────────────────────── */
 .shiny-progress-container {
   background-color: rgba(18, 40, 60, 0.38) !important;
@@ -611,13 +640,6 @@ body {
 .shiny-progress .progress-bar,
 .shiny-progress .bar {
   background: linear-gradient(90deg, #5f4ab4 0%, #8a52c8 100%) !important;
-  animation: progress-slide 1.4s ease-in-out infinite !important;
-  width: 45% !important;
-}
-
-@keyframes progress-slide {
-  0%   { margin-left: -50%; }
-  100% { margin-left: 110%; }
 }
 
 /* ── Update module ─────────────────────────────────────────────────── */

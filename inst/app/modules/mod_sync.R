@@ -32,7 +32,8 @@ mod_sync_ui <- function(id) {
       bslib::card_body(
         uiOutput(ns("detecting_msg")),
         uiOutput(ns("comparison_summary")),
-        DT::dataTableOutput(ns("comparison_table"))
+        DT::dataTableOutput(ns("comparison_table")),
+        uiOutput(ns("sync_log"))
       )
     )
   )
@@ -45,6 +46,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
     routes_data     <- reactiveVal(data.frame())
     comparison_data <- reactiveVal(NULL)
     detecting       <- reactiveVal(TRUE)
+    sync_log        <- reactiveVal(character())
 
     r_label <- function(path, version) {
       loc <- if (grepl("AppData", path, ignore.case = TRUE)) {
@@ -83,6 +85,12 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       status_class <- gsub("[^a-z]", "-", tolower(status))
       label <- if (!is.null(display)) display else status
       sprintf("<span class='sync-status sync-status-%s'>%s</span>", status_class, label)
+    }
+
+    add_sync_log <- function(...) {
+      msg <- paste(..., collapse = "")
+      entry <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
+      sync_log(c(sync_log(), entry))
     }
 
     route_version <- function(path) {
@@ -159,7 +167,12 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       }
 
       data.table::set(comp, j = "status", value = status)
-      comp[order(comp[["package"]]), ]
+      status_rank <- match(
+        comp[["status"]],
+        c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")
+      )
+      comp <- comp[order(status_rank, comp[["package"]]), ]
+      comp[]
     }
 
     packages_for_direction <- function(comp, direction) {
@@ -170,6 +183,32 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         return(comp[["package"]][comp[["status"]] %in% c("missing-from-A", "newer-in-B")])
       }
       character(0)
+    }
+
+    estimate_sync_time <- function(package_count) {
+      if (package_count <= 0) {
+        return("less than 1 minute")
+      }
+
+      min_minutes <- ceiling(max(1, package_count * 0.25))
+      max_minutes <- ceiling(max(min_minutes + 1, package_count * 1.5))
+
+      if (package_count >= 20) {
+        max_minutes <- ceiling(max_minutes * 1.25)
+      }
+
+      sprintf("%d-%d minutes", min_minutes, max_minutes)
+    }
+
+    refresh_comparison <- function(a_path, b_path, progress_detail = "Refreshing comparison") {
+      incProgress(0.05, detail = progress_detail)
+      incProgress(0.2, detail = "Scanning first installation")
+      a_pkgs <- courieR::manifest(rscript_path = a_path)
+      incProgress(0.35, detail = "Scanning second installation")
+      b_pkgs <- courieR::manifest(rscript_path = b_path)
+      incProgress(0.25, detail = "Building comparison")
+      comparison_data(build_sync_comparison(a_pkgs, b_pkgs))
+      incProgress(0.15, detail = "Comparison ready")
     }
 
     load_routes <- function() {
@@ -277,6 +316,17 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       )
     })
 
+    output$sync_log <- renderUI({
+      entries <- sync_log()
+      if (length(entries) == 0) return(NULL)
+
+      tags$div(
+        class = "sync-log",
+        tags$div(class = "sync-log-title", "Sync log"),
+        tags$pre(paste(utils::tail(entries, 80), collapse = "\n"))
+      )
+    })
+
     session$onFlushed(load_routes, once = TRUE)
 
     observeEvent(input$install_a, {
@@ -308,10 +358,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       }
 
       tryCatch(
-        withProgress(message = "Comparing R libraries...", {
-          a_pkgs <- courieR::manifest(rscript_path = a_path)
-          b_pkgs <- courieR::manifest(rscript_path = b_path)
-          comparison_data(build_sync_comparison(a_pkgs, b_pkgs))
+        withProgress(message = "Comparing R libraries...", value = 0, {
+          refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
         }),
         error = function(e) {
           showNotification(paste("Comparison failed:", e$message), type = "error", duration = NULL)
@@ -358,6 +406,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         version_in_b = ifelse(is.na(comp[["version_in_b"]]), "not installed", comp[["version_in_b"]]),
         status = mapply(status_badge, raw_status, status_labels, SIMPLIFY = TRUE),
         status_raw = raw_status,
+        status_rank = match(raw_status, c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")),
         stringsAsFactors = FALSE
       )
 
@@ -372,7 +421,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
           r_badge(a_version, "a"),
           r_badge(b_version, "b"),
           "Status",
-          "status_raw"
+          "status_raw",
+          "status_rank"
         ),
         filter = "top",
         options = list(
@@ -380,7 +430,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
           lengthMenu = c(25, 50, 100, -1),
           scrollX = TRUE,
           autoWidth = TRUE,
-          columnDefs = list(list(targets = 4, visible = FALSE))
+          order = list(list(5, "asc"), list(0, "asc")),
+          columnDefs = list(list(targets = c(4, 5), visible = FALSE))
         ),
         class = "stripe hover compact sync-table"
       ) |>
@@ -404,15 +455,19 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
 
     show_sync_confirmation <- function(plan) {
       if (plan$type == "full") {
+        package_count <- length(plan$packages_a_to_b) + length(plan$packages_b_to_a)
         msg <- sprintf(
-          "This will install or upgrade %d package(s) into B and %d package(s) into A. Proceed?",
+          "This will install or upgrade %d package(s) into B and %d package(s) into A. Estimated time: %s. Proceed?",
           length(plan$packages_a_to_b),
-          length(plan$packages_b_to_a)
+          length(plan$packages_b_to_a),
+          estimate_sync_time(package_count)
         )
       } else {
+        package_count <- length(plan$packages)
         msg <- sprintf(
-          "This will install or upgrade %d package(s). Proceed?",
-          length(plan$packages)
+          "This will install or upgrade %d package(s). Estimated time: %s. Proceed?",
+          length(plan$packages),
+          estimate_sync_time(package_count)
         )
       }
 
@@ -513,34 +568,103 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         return()
       }
 
+      sync_log(character())
+      add_sync_log("Preparing sync plan.")
+
       result <- tryCatch(
         withProgress(message = "Syncing packages...", value = 0, {
+          incProgress(0.05, detail = "Preparing sync plan")
+
           if (plan$type == "full") {
+            batches <- list()
             if (length(plan$packages_a_to_b) > 0) {
-              courieR::ship(
+              batches[[length(batches) + 1L]] <- list(
+                label = "A to B",
                 source_path = plan$source_a,
                 target_path = plan$target_b,
                 packages = plan$packages_a_to_b
               )
             }
             if (length(plan$packages_b_to_a) > 0) {
-              courieR::ship(
+              batches[[length(batches) + 1L]] <- list(
+                label = "B to A",
                 source_path = plan$source_b,
                 target_path = plan$target_a,
                 packages = plan$packages_b_to_a
               )
             }
-            list(count = length(plan$packages_a_to_b) + length(plan$packages_b_to_a))
           } else {
-            courieR::ship(
+            batches <- list(list(
+              label = plan$type,
               source_path = plan$source_path,
               target_path = plan$target_path,
               packages = plan$packages
-            )
-            list(count = length(plan$packages))
+            ))
           }
+
+          total_count <- sum(vapply(batches, function(batch) length(batch$packages), integer(1)))
+          failed_count <- 0L
+          add_sync_log("Estimated sync time: ", estimate_sync_time(total_count), ".")
+          batch_progress <- if (length(batches) == 0) 0 else 0.65 / length(batches)
+
+          for (batch in batches) {
+            package_preview <- paste(utils::head(batch$packages, 8), collapse = ", ")
+            if (length(batch$packages) > 8) {
+              package_preview <- paste0(package_preview, sprintf(", and %d more", length(batch$packages) - 8))
+            }
+
+            detail <- sprintf(
+              "Installing %d package(s): %s",
+              length(batch$packages),
+              package_preview
+            )
+            incProgress(0, detail = detail)
+            add_sync_log(sprintf(
+              "Starting %s sync: %d package(s) from %s to %s.",
+              batch$label,
+              length(batch$packages),
+              batch$source_path,
+              batch$target_path
+            ))
+            add_sync_log("Packages: ", paste(batch$packages, collapse = ", "))
+
+            ship_result <- courieR::ship(
+              source_path = batch$source_path,
+              target_path = batch$target_path,
+              packages = batch$packages
+            )
+
+            if ("results" %in% names(ship_result) && nrow(ship_result$results) > 0) {
+              failures <- ship_result$results[ship_result$results$status == "error", ]
+              failed_count <- failed_count + nrow(failures)
+              if (nrow(failures) > 0) {
+                add_sync_log(sprintf(
+                  "Finished %s sync with %d failure(s): %s.",
+                  batch$label,
+                  nrow(failures),
+                  paste(failures$package, collapse = ", ")
+                ))
+              } else {
+                add_sync_log(sprintf("Finished %s sync successfully.", batch$label))
+              }
+            } else {
+              add_sync_log(sprintf("Finished %s sync.", batch$label))
+            }
+
+            incProgress(batch_progress, detail = sprintf("Finished %s sync", batch$label))
+          }
+
+          incProgress(0.05, detail = "Finalizing sync")
+          add_sync_log("Refreshing comparison after sync.")
+          refresh_comparison(
+            input$install_a,
+            input$install_b,
+            progress_detail = "Refreshing comparison after sync"
+          )
+          list(count = total_count, failed = failed_count)
         }),
         error = function(e) {
+          add_sync_log("Sync failed: ", e$message)
           showNotification(paste("Sync failed:", e$message), type = "error", duration = NULL)
           if (is.function(push_error)) push_error(e$message, context = "Syncing packages")
           NULL
@@ -548,8 +672,16 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       )
 
       if (!is.null(result)) {
-        comparison_data(NULL)
-        showNotification(sprintf("Sync complete. %d package(s) installed.", result$count), type = "message")
+        add_sync_log(sprintf("Sync complete. %d package(s) processed.", result$count))
+        if (result$failed > 0) {
+          showNotification(
+            sprintf("Sync finished with %d failed package(s). See sync log.", result$failed),
+            type = "warning",
+            duration = NULL
+          )
+        } else {
+          showNotification(sprintf("Sync complete. %d package(s) installed.", result$count), type = "message")
+        }
       }
 
       pending_sync(NULL)

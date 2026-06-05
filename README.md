@@ -66,6 +66,13 @@ The **Sync** tab is the main workflow:
    - **Copy B → A** — installs or upgrades packages from B into A
    - **Two-Way Sync** — brings both installations to parity in both directions
 
+The comparison table lists unmatched and outdated packages first, ahead of packages
+that already match. Before a sync starts, the confirmation dialog shows an
+approximate time range based on the number of packages. During sync, the dashboard
+shows progress details and a log of the direction, package list, completion state,
+and any failures. When sync finishes, courieR rescans both selected installations
+and refreshes the comparison automatically.
+
 ## CLI Usage
 
 Prefer scripting? Use `ship()` directly:
@@ -97,3 +104,5 @@ result <- ship(
 - R >= 4.1
 - Works on Windows, macOS, and Linux
 - No packages required on the source R installation
+- The target R installation needs `pak` available so it can install packages into
+  its own library

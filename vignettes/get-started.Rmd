@@ -285,7 +285,15 @@ install.packages(c("shiny", "bslib", "bsicons", "DT"))
 open_hub()
 ```
 
-The Sync tab mirrors the `ship()` CLI workflow. The Advanced tab exposes `manifest()` output and lets you inspect any detected R installation's full package list.
+The Sync tab mirrors the `ship()` CLI workflow. Unmatched and outdated packages
+are shown first in the comparison table. Before installing packages, the
+confirmation dialog shows an approximate time range based on the number of
+packages in the sync plan. During sync, the dashboard shows progress details and
+a log of the direction, package list, completion state, and any failures. After
+sync finishes, courieR rescans both selected installations and refreshes the
+comparison automatically.
+
+The Advanced tab exposes `manifest()` output and lets you inspect any detected R installation's full package list.
 
 ---
 
@@ -293,6 +301,8 @@ The Sync tab mirrors the `ship()` CLI workflow. The Advanced tab exposes `manife
 
 - courieR skips base and recommended packages — only user-installed packages are migrated
 - `ship()` uses `pak` under the hood, which resolves dependencies automatically
+- The source R installation does not need extra packages; the target R
+  installation needs `pak` available because installation runs under the target R
 - GitHub packages require the source repository to be public, or a `GITHUB_PAT` to be set
 - If a package fails, check `result$results` — the `message` column has the pak error
 - On Linux without rig, `find_routes()` may only detect the R on `$PATH`; pass additional paths via `search_paths` if needed

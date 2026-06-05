@@ -10,11 +10,11 @@
 #' @section Safety:
 #' `ship()` installs packages into the target R library via [pak::pkg_install()]
 #' running in a subprocess. Set `dry_run = TRUE` to preview the migration plan
-#' without installing anything. When `dry_run = FALSE` (the default), pak
-#' from the current R session is used to install into the target library, which
-#' is the correct design for a migration tool (the source R need not have pak
-#' installed). All subprocess calls are confined to the target library path; no
-#' files are written outside the target library or the R temporary directory.
+#' without installing anything. When `dry_run = FALSE` (the default), pak runs
+#' under the target R executable so packages are installed for the destination R
+#' version. The source R need not have pak installed. All subprocess calls are
+#' confined to the target library path; no files are written outside the target
+#' library or the R temporary directory.
 #' @examples
 #' \donttest{
 #'   routes <- find_routes()
@@ -100,15 +100,45 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   specs <- plan$pak_spec
 
   pak_res <- tryCatch({
-    callr::r(
-      func = function(specs, lib, upgrade) {
-        pak::pkg_install(specs, lib = lib, ask = FALSE, upgrade = upgrade)
-        TRUE
-      },
-      args = list(specs = specs, lib = tgt_lib, upgrade = upgrade),
-      show = FALSE
+    install_args_file <- tempfile(pattern = "courieR_ship_args_", fileext = ".rds")
+    install_script_file <- tempfile(pattern = "courieR_ship_install_", fileext = ".R")
+    on.exit({
+      if (fs::file_exists(install_args_file)) fs::file_delete(install_args_file)
+      if (fs::file_exists(install_script_file)) fs::file_delete(install_script_file)
+    }, add = TRUE)
+
+    saveRDS(
+      list(specs = specs, lib = tgt_lib, upgrade = upgrade),
+      install_args_file
     )
-    list(status = "success", error = NULL)
+    writeLines(c(
+      "args <- commandArgs(trailingOnly = TRUE)",
+      "install_args <- readRDS(args[[1]])",
+      "if (!requireNamespace('pak', quietly = TRUE)) {",
+      "  stop('Package pak is not installed in the target R installation.', call. = FALSE)",
+      "}",
+      "pak::pkg_install(",
+      "  install_args$specs,",
+      "  lib = install_args$lib,",
+      "  ask = FALSE,",
+      "  upgrade = install_args$upgrade",
+      ")"
+    ), install_script_file)
+
+    res <- processx::run(
+      target_path,
+      c("--vanilla", install_script_file, install_args_file),
+      error_on_status = FALSE
+    )
+    if (res$status == 0) {
+      list(status = "success", error = NULL)
+    } else {
+      msg <- trimws(paste(res$stderr, res$stdout, sep = "\n"))
+      if (!nzchar(msg)) {
+        msg <- sprintf("Target pak subprocess exited with status %s", res$status)
+      }
+      list(status = "error", error = structure(list(message = msg), class = c("simpleError", "error", "condition")))
+    }
   }, error = function(e) list(status = "error", error = e))
 
   tgt_pkgs_after <- manifest(rscript_path = target_path, format = "data.table")

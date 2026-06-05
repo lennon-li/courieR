@@ -56,6 +56,43 @@ test_that("ship empty plan returns early", {
   expect_true(res$dry_run)
 })
 
+test_that("ship installs through target Rscript", {
+  skip_if_not_installed("mockery")
+
+  manifest_calls <- 0L
+  process_calls <- list()
+
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  mockery::stub(ship, "manifest", function(...) {
+    manifest_calls <<- manifest_calls + 1L
+    if (manifest_calls == 3L) {
+      return(data.table::data.table(package = "pkgA", version = "1.0", source = "CRAN"))
+    }
+    data.table::data.table()
+  })
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "processx::run", function(command, args, ...) {
+    process_calls[[length(process_calls) + 1L]] <<- list(command = command, args = args)
+    if ("-e" %in% args) {
+      return(list(status = 0L, stdout = tempdir(), stderr = ""))
+    }
+    list(status = 0L, stdout = "", stderr = "")
+  })
+
+  res <- ship("dummy_src", "dummy_tgt", dry_run = FALSE)
+
+  expect_equal(res$results$status, "success")
+  expect_equal(length(process_calls), 2L)
+  expect_equal(process_calls[[2L]]$command, "dummy_tgt")
+  expect_false("-e" %in% process_calls[[2L]]$args)
+})
+
 test_that("ship errors on nonexistent source path", {
   expect_error(
     ship("/nonexistent/src/Rscript", "dummy_tgt", dry_run = TRUE),
