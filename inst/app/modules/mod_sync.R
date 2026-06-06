@@ -32,8 +32,17 @@ mod_sync_ui <- function(id) {
       bslib::card_body(
         uiOutput(ns("detecting_msg")),
         uiOutput(ns("comparison_summary")),
-        DT::dataTableOutput(ns("comparison_table")),
-        uiOutput(ns("sync_log"))
+        div(
+          class = "sync-workspace",
+          div(
+            class = "sync-comparison-pane",
+            DT::dataTableOutput(ns("comparison_table"))
+          ),
+          div(
+            class = "sync-log-pane",
+            uiOutput(ns("sync_log"))
+          )
+        )
       )
     )
   )
@@ -73,8 +82,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       to_text   <- if (is.null(to_version)   || is.na(to_version))   "R ?" else paste("R", to_version)
       arrow <- if (bidirectional) "&#8652;" else "&rarr;"
       shiny::HTML(sprintf(
-        "<span class='sync-route-label'>%s</span><div class='sync-route-row'><span class='sync-route-pill sync-col-%s'>%s</span><span class='sync-route-arrow-icon'>%s</span><span class='sync-route-pill sync-col-%s'>%s</span></div>",
-        label,
+        "<span class='visually-hidden'>%s</span><div class='sync-route-row'><span class='sync-route-pill sync-col-%s'>%s</span><span class='sync-route-arrow-icon'>%s</span><span class='sync-route-pill sync-col-%s'>%s</span></div>",
+        htmltools::htmlEscape(label),
         from_bucket, from_text,
         arrow,
         to_bucket, to_text
@@ -91,6 +100,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       msg <- paste(..., collapse = "")
       entry <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
       sync_log(c(sync_log(), entry))
+      try(shiny:::flushReact(), silent = TRUE)
     }
 
     comparison_counts_text <- function(comp) {
@@ -397,7 +407,17 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
 
     output$sync_log <- renderUI({
       entries <- sync_log()
-      if (length(entries) == 0) return(NULL)
+      if (length(entries) == 0) {
+        return(tags$div(
+          class = "sync-log sync-log-empty",
+          tags$div(
+            class = "sync-log-title",
+            "Sync log",
+            tags$span(class = "sync-log-subtitle", "Waiting for sync activity")
+          ),
+          tags$pre("Run Compare, choose a sync direction, then watch package activity here.")
+        ))
+      }
 
       tags$div(
         class = "sync-log",

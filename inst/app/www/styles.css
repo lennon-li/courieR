@@ -41,6 +41,23 @@ body {
   background: transparent;
 }
 
+.app-brand-mark {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+}
+
+.app-version {
+  color: #7a95a8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .top-install-summary {
   display: flex;
   flex-wrap: wrap;
@@ -397,6 +414,7 @@ body {
 .sync-route-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
 }
 
@@ -444,6 +462,35 @@ body {
 
 #sync-comparison_table_wrapper {
   padding-top: 0.2rem;
+}
+
+.sync-workspace {
+  display: grid;
+  grid-template-columns: minmax(560px, 1.15fr) minmax(420px, 0.85fr);
+  align-items: stretch;
+  gap: 1rem;
+  width: 100%;
+}
+
+.sync-comparison-pane,
+.sync-log-pane {
+  min-width: 0;
+}
+
+.sync-log-pane {
+  position: sticky;
+  top: 0.75rem;
+  align-self: start;
+}
+
+@media (max-width: 1200px) {
+  .sync-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-log-pane {
+    position: static;
+  }
 }
 
 .advanced-pane .card {
@@ -578,7 +625,7 @@ body {
 }
 
 .sync-log {
-  margin-top: 1rem;
+  margin-top: 0;
   border: 1px solid #d9e5ec;
   background: #fbfdff;
   border-radius: 12px;
@@ -607,8 +654,8 @@ body {
 
 .sync-log pre {
   margin: 0;
-  min-height: 280px;
-  max-height: 520px;
+  min-height: 520px;
+  max-height: calc(100vh - 280px);
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -619,6 +666,11 @@ body {
   padding: 0.9rem;
   font-size: 0.9rem;
   line-height: 1.55;
+}
+
+.sync-log-empty pre {
+  color: #6d879b;
+  font-style: italic;
 }
 
 /* ── Progress overlay (withProgress) ──────────────────────────────── */

@@ -1,7 +1,11 @@
 ui <- bslib::page_navbar(
   title = div(
     class = "app-brand",
-    tags$img(src = "logo.png", height = "84px", style = "vertical-align: middle; background: transparent;"),
+    div(
+      class = "app-brand-mark",
+      tags$img(src = "logo.png", height = "84px", style = "vertical-align: middle; background: transparent;"),
+      tags$div(class = "app-version", sprintf("v%s", utils::packageVersion("courieR")))
+    ),
     uiOutput("top_install_summary")
   ),
   window_title = "courieR",
