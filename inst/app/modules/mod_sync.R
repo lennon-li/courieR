@@ -27,13 +27,17 @@ mod_sync_ui <- function(id) {
         ),
         selected = "online"
       ),
-      tags$div(class = "sync-select-label", "Click a button below to sync packages"),
-      div(
-        class = "sync-button-grid",
-        actionButton(ns("sync_a_to_b"), "A→B", class = "btn-sm sync-btn sync-btn-a"),
-        actionButton(ns("sync_b_to_a"), "B→A", class = "btn-sm sync-btn sync-btn-b"),
-        actionButton(ns("sync_full"), "Full Sync", class = "btn-sm sync-btn sync-btn-full")
-      )
+      selectInput(
+        ns("sync_direction"),
+        label = "Sync direction",
+        choices = c(
+          "A → B" = "A_to_B",
+          "B → A" = "B_to_A",
+          "Two-way"    = "full"
+        ),
+        selected = "A_to_B"
+      ),
+      actionButton(ns("sync_btn"), "Sync", class = "btn sync-compare-btn"),
     ),
     bslib::card(
       class = "sync-card",
@@ -375,14 +379,6 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       detecting(FALSE)
     }
 
-    observe({
-      a_version <- route_version(input$install_a)
-      b_version <- route_version(input$install_b)
-
-      updateActionButton(session, "sync_a_to_b", label = button_label(a_version, "a", b_version, "b", "Copy A → B"))
-      updateActionButton(session, "sync_b_to_a", label = button_label(b_version, "b", a_version, "a", "Copy B → A"))
-      updateActionButton(session, "sync_full",   label = button_label(a_version, "a", b_version, "b", "Two-Way Sync", bidirectional = TRUE))
-    })
 
     output$install_a_badge <- renderUI({
       a_version <- route_version(input$install_a)
@@ -684,82 +680,50 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       ))
     }
 
-    observeEvent(input$sync_a_to_b, {
+    observeEvent(input$sync_btn, {
       comp <- sync_comparison()
       if (is.null(comp)) {
-        showNotification("Select both installs first.", type = "warning")
+        showNotification("Run Compare first.", type = "warning")
         return()
       }
 
-      packages <- packages_for_direction(comp, "A_to_B")
-      if (length(packages) == 0) {
-        showNotification("Install B already has all packages from A at the same or newer version.", type = "message")
-        return()
+      direction <- input$sync_direction
+
+      if (direction == "full") {
+        packages_a_to_b <- packages_for_direction(comp, "A_to_B")
+        packages_b_to_a <- packages_for_direction(comp, "B_to_A")
+        if (length(packages_a_to_b) + length(packages_b_to_a) == 0) {
+          showNotification("Both installations are already in sync.", type = "message")
+          return()
+        }
+        plan <- list(
+          type            = "full",
+          source_a        = input$install_a,
+          source_b        = input$install_b,
+          target_a        = input$install_a,
+          target_b        = input$install_b,
+          packages_a_to_b = packages_a_to_b,
+          packages_b_to_a = packages_b_to_a
+        )
+        pending_sync(plan)
+        show_sync_confirmation(plan)
+      } else {
+        packages <- packages_for_direction(comp, direction)
+        if (length(packages) == 0) {
+          label <- if (direction == "A_to_B") "B" else "A"
+          showNotification(sprintf("Install %s already has all packages at the same or newer version.", label), type = "message")
+          return()
+        }
+        src <- if (direction == "A_to_B") input$install_a else input$install_b
+        tgt <- if (direction == "A_to_B") input$install_b else input$install_a
+        pending_sync(list(
+          type        = direction,
+          source_path = src,
+          target_path = tgt,
+          packages    = packages
+        ))
+        show_sync_confirmation(pending_sync())
       }
-
-      pending_sync(list(
-        type = "A_to_B",
-        source_path = input$install_a,
-        target_path = input$install_b,
-        target_b = input$install_b,
-        packages = packages
-      ))
-      show_sync_confirmation(pending_sync())
-    })
-
-    observeEvent(input$sync_b_to_a, {
-      comp <- sync_comparison()
-      if (is.null(comp)) {
-        showNotification("Select both installs first.", type = "warning")
-        return()
-      }
-
-      packages <- packages_for_direction(comp, "B_to_A")
-      if (length(packages) == 0) {
-        showNotification("Install A already has all packages from B at the same or newer version.", type = "message")
-        return()
-      }
-
-      pending_sync(list(
-        type = "B_to_A",
-        source_path = input$install_b,
-        target_path = input$install_a,
-        target_path_display = input$install_a,
-        packages = packages
-      ))
-      show_sync_confirmation(list(
-        type = "B_to_A",
-        packages = packages,
-        target_path = input$install_a
-      ))
-    })
-
-    observeEvent(input$sync_full, {
-      comp <- sync_comparison()
-      if (is.null(comp)) {
-        showNotification("Select both installs first.", type = "warning")
-        return()
-      }
-
-      packages_a_to_b <- packages_for_direction(comp, "A_to_B")
-      packages_b_to_a <- packages_for_direction(comp, "B_to_A")
-
-      if (length(packages_a_to_b) + length(packages_b_to_a) == 0) {
-        showNotification("Both installs already share the same packages at the same or newer versions.", type = "message")
-        return()
-      }
-
-      plan <- list(
-        type = "full",
-        source_a = input$install_a,
-        source_b = input$install_b,
-        target_a = input$install_a,
-        target_b = input$install_b,
-        packages_a_to_b = packages_a_to_b,
-        packages_b_to_a = packages_b_to_a
-      )
-      pending_sync(plan)
-      show_sync_confirmation(plan)
     })
 
     observeEvent(input$confirm_sync, {
