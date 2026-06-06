@@ -2,9 +2,11 @@
 
 export(dispatch)
 export(find_routes)
+export(hub)
 export(inspect_shipment)
 export(inventory)
 export(manifest)
+export(migrate)
 export(open_depot)
 export(open_hub)
 export(parse_dispatch_log)

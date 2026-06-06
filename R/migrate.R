@@ -12,6 +12,10 @@
 #'   Default `FALSE`.
 #' @param upgrade If `TRUE`, packages already in the target but at an older
 #'   version are upgraded as well. Default `TRUE`.
+#' @param mode Transfer mode passed to [ship()]: `"online"` (default —
+#'   reinstall via pak), `"offline"` (file-copy only, skip packages without a
+#'   valid source path), or `"preserve"` (copy for exact version, fall back to a
+#'   pinned pak spec on failure).
 #' @param ... Additional arguments passed to [ship()].
 #' @return The same named list returned by [ship()]: `plan`, `results`,
 #'   `comparison`, `dry_run`, `elapsed_sec`.

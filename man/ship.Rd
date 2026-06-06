@@ -11,17 +11,18 @@ ship(
   dry_run = FALSE,
   upgrade = FALSE,
   log_callback = NULL,
+  mode = c("online", "offline", "preserve"),
   ...
 )
 }
 \arguments{
 \item{source_path}{Full path to the \code{Rscript} executable of the source
 installation (the one you are copying packages \emph{from}). Use
-\code{\link{find_routes}} to discover available paths.}
+\code{\link[=find_routes]{find_routes()}} to discover available paths.}
 
 \item{target_path}{Full path to the \code{Rscript} executable of the target
 installation (the one you are installing packages \emph{into}). The target
-R must have \code{pak} installed.}
+R must have \code{pak} installed for \code{mode = "online"} or pak fallbacks.}
 
 \item{packages}{Character vector of package names to act on. If \code{NULL}
 (the default), all packages that are missing from or outdated in the
@@ -37,37 +38,42 @@ only packages missing from the target are installed.}
 
 \item{log_callback}{Optional function of one argument. When provided, it is
 called with a single character string for each progress message emitted
-during the pak subprocess. Useful for surfacing progress in a UI.}
+during package transfer.}
+
+\item{mode}{Transfer mode: \code{"online"} reinstalls via pak (default),
+\code{"offline"} copies package directories by file and skips packages without
+a valid source path, and \code{"preserve"} copies first then falls back to a
+pinned pak spec for packages that could not be copied.}
 
 \item{...}{Reserved for future arguments.}
 }
 \value{
 A named list with the following elements:
 \describe{
-  \item{\code{plan}}{\code{data.table} of planned actions with columns \code{package},
-    \code{action} (\code{"install"} or \code{"upgrade"}), \code{version.x} (source version),
-    \code{version.y} (target version, \code{NA} if missing), and \code{pak_spec}.}
-  \item{\code{results}}{\code{data.table} of per-package outcomes with columns
-    \code{package}, \code{status} (\code{"success"} or \code{"error"}), and \code{message}.}
-  \item{\code{comparison}}{The raw \code{\link{inventory}} comparison table.}
-  \item{\code{dry_run}}{\code{TRUE} if no packages were installed.}
-  \item{\code{elapsed_sec}}{Total wall-clock time in seconds.}
+\item{\code{plan}}{\code{data.table} of planned actions with columns \code{package},
+\code{action} (\code{"install"} or \code{"upgrade"}), \code{mode}, \code{version.x} (source
+version), \code{version.y} (target version, \code{NA} if the package is
+missing), and \code{pak_spec} (the spec passed to pak).}
+\item{\code{results}}{\code{data.table} of per-package outcomes with columns
+\code{package}, \code{status} (\code{"success"}, \code{"skipped"}, or \code{"error"}), and
+\code{message}.}
+\item{\code{comparison}}{The raw \code{\link[=inventory]{inventory()}} comparison table.}
+\item{\code{dry_run}}{\code{TRUE} if no packages were installed.}
+\item{\code{elapsed_sec}}{Total wall-clock time in seconds.}
 }
 }
 \description{
-Compares the package libraries of two R installations and installs missing
-or outdated packages into the target using
-\code{\link[pak:pkg_install]{pak::pkg_install()}} running under the target R executable.
+Compares the package libraries of two R installations and transfers missing
+or outdated packages into the target.
 }
 \section{Safety}{
 
-\code{ship()} installs packages into the target R library via \code{\link[pak:pkg_install]{pak::pkg_install()}}
-running in a subprocess. Set \code{dry_run = TRUE} to preview the migration plan
-without installing anything. When \code{dry_run = FALSE} (the default), pak runs
-under the target R executable so packages are installed for the destination R
-version. The source R need not have pak installed. All subprocess calls are
-confined to the target library path; no files are written outside the target
-library or the R temporary directory.
+\code{ship()} can install packages into the target R library via
+\code{\link[pak:pkg_install]{pak::pkg_install()}} running in a subprocess, or copy package directories
+directly for offline/preserve transfers. Set \code{dry_run = TRUE} to preview the
+migration plan without installing or copying anything. The source R need not
+have pak installed. Subprocess calls and file copies are confined to the
+target library path and R temporary directory.
 }
 
 \examples{

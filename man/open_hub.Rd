@@ -23,7 +23,8 @@ Called for its side effect of launching a Shiny application.
 Opens the Shiny dashboard in your browser. The dashboard detects all R
 installations on the machine and lets you compare and sync packages between
 any two of them without writing any code.
-
+}
+\details{
 \code{hub()} is a short alias for \code{open_hub()}.
 }
 \examples{

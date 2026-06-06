@@ -11,6 +11,7 @@ Detects all R installations on the current machine and migrates installed R pack
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://lennon-li.github.io/courieR/}
   \item \url{https://github.com/lennon-li/courieR}
   \item Report bugs at \url{https://github.com/lennon-li/courieR/issues}
 }

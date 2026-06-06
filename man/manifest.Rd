@@ -2,7 +2,7 @@
 % Please edit documentation in R/manifest.R
 \name{manifest}
 \alias{manifest}
-\title{List packages installed in a library, optionally via a different R executable}
+\title{List packages installed in a library}
 \usage{
 manifest(
   rscript_path = NULL,
@@ -13,7 +13,7 @@ manifest(
 }
 \arguments{
 \item{rscript_path}{Full path to an \code{Rscript} executable. Defaults to the
-current R session. Use \code{\link{find_routes}} to get paths for other
+current R session. Use \code{\link[=find_routes]{find_routes()}} to get paths for other
 installations.}
 
 \item{lib_path}{Library path to query within the target R. Defaults to the
@@ -22,7 +22,7 @@ first element of \code{.libPaths()} in that R installation.}
 \item{format}{\code{"data.table"} (default) or \code{"data.frame"}.}
 
 \item{timeout_sec}{Maximum seconds to wait for the subprocess. Increase
-on slow machines or network-mounted drives. Default \code{30}.}
+this on slow machines or network-mounted drives. Default \code{30}.}
 }
 \value{
 A \code{data.table} (or \code{data.frame}) with one row per user-installed
