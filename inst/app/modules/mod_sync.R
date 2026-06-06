@@ -17,6 +17,16 @@ mod_sync_ui <- function(id) {
       ),
       actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn"),
       hr(),
+      selectInput(
+        ns("transfer_mode"),
+        label = "Transfer mode",
+        choices = c(
+          "Online — reinstall via pak" = "online",
+          "Offline — copy files, skip the rest" = "offline",
+          "Preserve versions — copy then pin" = "preserve"
+        ),
+        selected = "online"
+      ),
       tags$div(class = "sync-select-label", "Click a button below to sync packages"),
       div(
         class = "sync-button-grid",
@@ -637,6 +647,14 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
     })
 
     show_sync_confirmation <- function(plan) {
+      mode_note <- switch(
+        input$transfer_mode,
+        online = "Packages will be reinstalled from CRAN / GitHub / Bioconductor.",
+        offline = "Packages will be copied by file. Packages without a valid source path will be skipped.",
+        preserve = "Packages will be copied first. Any that cannot be copied will be reinstalled at the same version.",
+        "Packages will be transferred using the selected mode."
+      )
+
       if (plan$type == "full") {
         package_count <- length(plan$packages_a_to_b) + length(plan$packages_b_to_a)
         msg <- sprintf(
@@ -656,7 +674,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
 
       showModal(modalDialog(
         title = "Confirm Sync",
-        msg,
+        tags$p(msg),
+        tags$p(tags$strong("Transfer mode: "), mode_note),
         easyClose = TRUE,
         footer = tagList(
           modalButton("Cancel"),
@@ -819,7 +838,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
             target_path = batch$target_path,
             packages = batch$packages,
             upgrade = TRUE,
-            log_callback = add_sync_log
+            log_callback = add_sync_log,
+            mode = input$transfer_mode
           )
 
           add_plan_log(ship_result)
