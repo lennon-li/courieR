@@ -256,6 +256,7 @@ find_routes <- function(search_paths = NULL) {
 
   dt$rscript_path <- as.character(fs::path_real(dt$rscript_path))
   dt <- unique(dt, by = "rscript_path")
+  dt <- unique(dt, by = "version")
 
   current_rscript <- file.path(R.home("bin"), "Rscript")
   if (os == "windows") {
