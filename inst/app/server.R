@@ -50,7 +50,6 @@ server <- function(input, output, session) {
         tags$div(
           class = paste("top-install-pill", extra),
           tags$span(class = "top-install-pill-version", sprintf("R %s", routes$version[[i]])),
-          " ",
           tags$span(class = "top-install-pill-location", route_label_top(path))
         )
       })

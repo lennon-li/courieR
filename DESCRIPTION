@@ -1,7 +1,7 @@
 Package: courieR
 Type: Package
 Title: Migrate Installed R Packages Between R Versions
-Version: 0.2.2
+Version: 0.2.3
 Authors@R:
     person("Lennon", "Li", , "yeli@biostats.ai", role = c("aut", "cre"))
 Description: Detects all R installations on the current machine and migrates
@@ -26,12 +26,12 @@ Imports:
     desc (>= 1.4.0),
     fs (>= 1.6.0),
     cli (>= 3.6.0),
-    data.table (>= 1.14.0)
-Suggests:
+    data.table (>= 1.14.0),
     shiny (>= 1.8.0),
     bslib (>= 0.7.0),
     bsicons (>= 0.1.2),
-    DT (>= 0.31),
+    DT (>= 0.31)
+Suggests:
     stringr (>= 1.5.0),
     testthat (>= 3.0.0),
     withr (>= 3.0.0),

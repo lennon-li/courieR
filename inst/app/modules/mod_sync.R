@@ -93,6 +93,71 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       sync_log(c(sync_log(), entry))
     }
 
+    comparison_counts_text <- function(comp) {
+      if (is.null(comp) || nrow(comp) == 0) {
+        return("no packages in comparison")
+      }
+
+      statuses <- c("same", "missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+      counts <- table(factor(comp[["status"]], levels = statuses))
+      sprintf(
+        "%d same, %d missing from B, %d missing from A, %d newer in A, %d newer in B",
+        counts[["same"]],
+        counts[["missing-from-B"]],
+        counts[["missing-from-A"]],
+        counts[["newer-in-A"]],
+        counts[["newer-in-B"]]
+      )
+    }
+
+    add_plan_log <- function(ship_result) {
+      plan <- ship_result$plan
+      if (is.null(plan) || nrow(plan) == 0) {
+        add_sync_log("Plan details: no package actions were required by ship().")
+        return(invisible(NULL))
+      }
+
+      install_n <- sum(plan$action == "install", na.rm = TRUE)
+      upgrade_n <- sum(plan$action == "upgrade", na.rm = TRUE)
+      add_sync_log(sprintf("Plan details: %d install(s), %d upgrade(s).", install_n, upgrade_n))
+
+      for (i in seq_len(nrow(plan))) {
+        source_version <- if ("version.x" %in% names(plan)) plan$version.x[[i]] else NA_character_
+        target_version <- if ("version.y" %in% names(plan)) plan$version.y[[i]] else NA_character_
+        target_text <- if (is.na(target_version) || !nzchar(target_version)) "not installed" else target_version
+        pak_spec <- if ("pak_spec" %in% names(plan)) plan$pak_spec[[i]] else plan$package[[i]]
+        add_sync_log(sprintf(
+          "  - %s: %s target %s -> source %s using pak spec %s",
+          plan$package[[i]],
+          plan$action[[i]],
+          target_text,
+          source_version,
+          pak_spec
+        ))
+      }
+
+      invisible(NULL)
+    }
+
+    add_result_log <- function(ship_result) {
+      results <- ship_result$results
+      if (is.null(results) || nrow(results) == 0) {
+        add_sync_log("Result details: no per-package results were returned.")
+        return(invisible(NULL))
+      }
+
+      for (i in seq_len(nrow(results))) {
+        add_sync_log(sprintf(
+          "  - %s: %s — %s",
+          results$package[[i]],
+          results$status[[i]],
+          results$message[[i]]
+        ))
+      }
+
+      invisible(NULL)
+    }
+
     route_version <- function(path) {
       routes <- routes_data()
       if (nrow(routes) == 0 || is.null(path) || !nzchar(path)) {
@@ -105,6 +170,20 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       }
 
       as.character(routes$version[[idx]])
+    }
+
+    route_display <- function(path) {
+      routes <- routes_data()
+      if (nrow(routes) == 0 || is.null(path) || !nzchar(path)) {
+        return("unknown R installation")
+      }
+
+      idx <- match(path, routes$rscript_path)
+      if (is.na(idx)) {
+        return("selected R installation")
+      }
+
+      r_label(path, routes$version[[idx]])
     }
 
     normalize_manifest <- function(pkgs) {
@@ -322,8 +401,12 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
 
       tags$div(
         class = "sync-log",
-        tags$div(class = "sync-log-title", "Sync log"),
-        tags$pre(paste(utils::tail(entries, 80), collapse = "\n"))
+        tags$div(
+          class = "sync-log-title",
+          "Sync log",
+          tags$span(class = "sync-log-subtitle", "Detailed package actions and post-sync comparison refresh")
+        ),
+        tags$pre(paste(utils::tail(entries, 250), collapse = "\n"))
       )
     })
 
@@ -570,6 +653,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
 
       sync_log(character())
       add_sync_log("Preparing sync plan.")
+      add_sync_log("Base and recommended R packages are skipped; only user-installed packages are compared/synced.")
+      add_sync_log("Current comparison before sync: ", comparison_counts_text(comparison_data()), ".")
 
       result <- tryCatch(
         withProgress(message = "Syncing packages...", value = 0, {
@@ -623,16 +708,20 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
               "Starting %s sync: %d package(s) from %s to %s.",
               batch$label,
               length(batch$packages),
-              batch$source_path,
-              batch$target_path
+              route_display(batch$source_path),
+              route_display(batch$target_path)
             ))
             add_sync_log("Packages: ", paste(batch$packages, collapse = ", "))
 
             ship_result <- courieR::ship(
               source_path = batch$source_path,
               target_path = batch$target_path,
-              packages = batch$packages
+              packages = batch$packages,
+              upgrade = TRUE
             )
+
+            add_plan_log(ship_result)
+            add_result_log(ship_result)
 
             if ("results" %in% names(ship_result) && nrow(ship_result$results) > 0) {
               failures <- ship_result$results[ship_result$results$status == "error", ]
@@ -661,7 +750,14 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
             input$install_b,
             progress_detail = "Refreshing comparison after sync"
           )
-          list(count = total_count, failed = failed_count)
+          comp_after <- comparison_data()
+          remaining <- if (is.null(comp_after)) {
+            NA_integer_
+          } else {
+            sum(comp_after[["status"]] != "same")
+          }
+          add_sync_log("Post-sync comparison refreshed: ", comparison_counts_text(comp_after), ".")
+          list(count = total_count, failed = failed_count, remaining = remaining)
         }),
         error = function(e) {
           add_sync_log("Sync failed: ", e$message)
@@ -679,8 +775,14 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
             type = "warning",
             duration = NULL
           )
+        } else if (!is.na(result$remaining) && result$remaining > 0) {
+          showNotification(
+            sprintf("Sync finished, but %d package difference(s) remain. See sync log.", result$remaining),
+            type = "warning",
+            duration = NULL
+          )
         } else {
-          showNotification(sprintf("Sync complete. %d package(s) installed.", result$count), type = "message")
+          showNotification(sprintf("Sync complete. %d package(s) processed; comparison refreshed.", result$count), type = "message")
         }
       }
 
