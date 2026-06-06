@@ -1,0 +1,85 @@
+url: https://lennon-li.github.io/courieR/
+
+home:
+  title: courieR — Migrate R Packages Between R Versions
+  description: >
+    Detect every R installation on your machine and sync packages between
+    them — one-way, two-way, or selectively — from the R console or a
+    point-and-click dashboard.
+
+template:
+  bootstrap: 5
+  bslib:
+    primary:          "#1d6fa5"
+    link-color:       "#1d6fa5"
+    headings-color:   "#183247"
+    body-color:       "#355066"
+    body-bg:          "#f8fbfe"
+    border-radius:    "0.5rem"
+    btn-border-radius: "0.4rem"
+    font-size-base:   "0.95rem"
+  includes:
+    in_header: |
+      <style>
+        .navbar { border-bottom: 1px solid rgba(196,214,228,0.85); }
+        .pkgdown-nav-item { font-weight: 500; }
+        code { color: #15606a; background: #e3f5f7; border-radius: 3px; padding: 0.1em 0.3em; }
+      </style>
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get Started
+      href: articles/get-started.html
+    github:
+      icon: fab fa-github
+      href: https://github.com/lennon-li/courieR
+      aria-label: GitHub
+
+reference:
+  - title: Dashboard
+    desc: Launch the interactive Shiny dashboard.
+    contents:
+      - hub
+      - open_hub
+
+  - title: Core workflow
+    desc: >
+      The four functions that form the CLI pipeline:
+      discover → scan → compare → migrate.
+    contents:
+      - find_routes
+      - manifest
+      - inventory
+      - ship
+
+  - title: Utilities
+    desc: Lower-level helpers used internally or for advanced scripting.
+    contents:
+      - wrap
+      - starts_with("rig")
+
+  - title: Internal
+    desc: Not intended for direct use.
+    contents:
+      - courieR-package
+      - starts_with("dispatch")
+      - starts_with("inspect")
+      - starts_with("open_depot")
+      - starts_with("parse_")
+      - starts_with("rate_")
+      - starts_with("take_")
+
+articles:
+  - title: ~
+    navbar: ~
+    contents:
+      - get-started
+
+news:
+  releases:
+  - text: "0.2.3"
+    href: https://github.com/lennon-li/courieR/releases/tag/v0.2.3

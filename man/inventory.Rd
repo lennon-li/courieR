@@ -7,15 +7,30 @@
 inventory(source_pkgs, target_pkgs)
 }
 \arguments{
-\item{source_pkgs}{data.table from \code{manifest}}
+\item{source_pkgs}{\code{data.table} or \code{data.frame} from \code{\link{manifest}},
+representing the installation you are copying packages \emph{from}.}
 
-\item{target_pkgs}{data.table from \code{manifest}}
+\item{target_pkgs}{\code{data.table} or \code{data.frame} from \code{\link{manifest}},
+representing the installation you are copying packages \emph{into}.}
 }
 \value{
-A list of data.tables and a summary data.frame
+A named list with the following elements:
+\describe{
+  \item{\code{missing}}{Packages in source that are absent from target.}
+  \item{\code{outdated}}{Packages where the source version is newer than the target version.}
+  \item{\code{newer}}{Packages where the target already has a newer version than the source.}
+  \item{\code{same}}{Packages at identical versions in both installations.}
+  \item{\code{comparison}}{Full merged \code{data.table} of all source packages with a
+    \code{status} column (\code{"missing"}, \code{"outdated"}, \code{"newer"}, or \code{"same"}).}
+  \item{\code{summary}}{One-row \code{data.frame} with counts: \code{missing}, \code{outdated},
+    \code{newer}, \code{same}, \code{total_source}.}
+}
+Each data.table includes columns \code{package}, \code{version.x} (source version),
+\code{version.y} (target version), and \code{source}.
 }
 \description{
-Compare two package libraries
+Takes two package manifests (from \code{\link{manifest}}) and classifies every
+source package as missing, outdated, newer, or the same relative to the target.
 }
 \examples{
 src <- data.table::data.table(

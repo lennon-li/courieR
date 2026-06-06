@@ -2,25 +2,33 @@
 % Please edit documentation in R/open_hub.R
 \name{open_hub}
 \alias{open_hub}
-\title{Launch the courieR delivery hub dashboard}
+\alias{hub}
+\title{Launch the courieR dashboard}
 \usage{
 open_hub(project_path = NULL, port = NULL, launch.browser = TRUE)
+
+hub(project_path = NULL, port = NULL, launch.browser = TRUE)
 }
 \arguments{
-\item{project_path}{Optional path to pre-fill in the app}
+\item{project_path}{Reserved; currently unused.}
 
-\item{port}{Optional port to run the app on}
+\item{port}{Port to run the Shiny app on. \code{NULL} picks a random available port.}
 
-\item{launch.browser}{Logical. Whether to open the browser}
+\item{launch.browser}{Whether to open the system browser automatically. Default \code{TRUE}.}
 }
 \value{
 Called for its side effect of launching a Shiny application.
 }
 \description{
-Launch the courieR delivery hub dashboard
+Opens the Shiny dashboard in your browser. The dashboard detects all R
+installations on the machine and lets you compare and sync packages between
+any two of them without writing any code.
+
+\code{hub()} is a short alias for \code{open_hub()}.
 }
 \examples{
 if (interactive()) {
-  open_hub()
+  hub()        # short form
+  open_hub()   # same thing
 }
 }

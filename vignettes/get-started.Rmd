@@ -15,17 +15,13 @@ courieR syncs installed R packages between R versions on the same machine. You c
 
 ## Installation
 
-Install courieR from CRAN:
+Install courieR from GitHub (CRAN submission in progress):
 
 ```{r}
-install.packages("courieR")
+pak::pkg_install("lennon-li/courieR")
 ```
 
-The core CLI workflow (`find_routes()`, `manifest()`, `inventory()`, `ship()`) has no Shiny dependency. The dashboard (`open_hub()`) requires additional packages:
-
-```{r}
-install.packages(c("shiny", "bslib", "bsicons", "DT"))
-```
+All dependencies — including the dashboard packages — are installed automatically.
 
 ## Step 1 — Discover Your R Installations
 
@@ -94,11 +90,7 @@ nrow(my_pkgs)
 #> [1] 312
 ```
 
-Base and recommended packages are included in the raw manifest. Filter them out before comparison:
-
-```{r}
-user_pkgs <- src_pkgs[is.na(src_pkgs$priority) | !(src_pkgs$priority %in% c("base", "recommended")), ]
-```
+Base and recommended packages are excluded automatically — the returned data contains only user-installed packages.
 
 ### Step 3 — Compare two libraries with `inventory()`
 
@@ -137,10 +129,10 @@ comp$missing[, c("package", "version", "source")]
 #>  3:   officer   0.6.6    CRAN
 #>  ...
 
-comp$outdated[, c("package", "version_src", "version_tgt", "source")]
-#>    package version_src version_tgt source
-#> 1:  ggplot2       3.5.1       3.4.4   CRAN
-#> 2:   tibble       3.2.1       3.2.0   CRAN
+comp$outdated[, c("package", "version.x", "version.y", "source")]
+#>    package version.x version.y source
+#> 1:  ggplot2     3.5.1     3.4.4   CRAN
+#> 2:   tibble     3.2.1     3.2.0   CRAN
 ```
 
 ### Step 4 — Migrate with `ship()`
@@ -187,17 +179,20 @@ result <- ship(
 #### Check results
 
 ```{r}
-# summary counts
-result$summary
-#> $installed   47
-#> $upgraded    12
-#> $failed       1
-#> $skipped      0
+# per-package outcomes
+result$results
+#>     package  status                       message
+#>  1: bookdown success                     Installed
+#>  2:     brms success                     Installed
+#>  3:    rJava   error  installation of rJava failed...
 
-# per-package results
-result$results[result$results$status == "error", c("package", "message")]
-#>    package                         message
-#> 1:    rJava  installation of rJava failed...
+# count by outcome
+table(result$results$status)
+#>   error success
+#>       1      58
+
+# failed packages only
+result$results[result$results$status == "error", ]
 ```
 
 #### Migrate GitHub and Bioconductor packages
@@ -278,20 +273,31 @@ pak::pkg_install(saved$package)
 
 ## Dashboard
 
-If you prefer point-and-click, `open_hub()` launches a Shiny dashboard that wraps the same pipeline. Install the dashboard dependencies first if you haven't already:
+`hub()` launches a Shiny dashboard that wraps the same pipeline:
 
 ```{r}
-install.packages(c("shiny", "bslib", "bsicons", "DT"))
-open_hub()
+library(courieR)
+hub()
 ```
 
-The Sync tab mirrors the `ship()` CLI workflow. Unmatched and outdated packages
-are shown first in the comparison table. Before installing packages, the
-confirmation dialog shows an approximate time range based on the number of
-packages in the sync plan. During sync, the dashboard shows progress details and
-a log of the direction, package list, completion state, and any failures. After
-sync finishes, courieR rescans both selected installations and refreshes the
-comparison automatically.
+```{r sync-screenshot, echo=FALSE, out.width="100%", fig.cap="The Sync tab: select two R installations, compare their libraries, and sync in either direction. The log pane on the right shows real-time progress."}
+img <- "figures/sync-tab.png"
+if (file.exists(img)) knitr::include_graphics(img)
+```
+
+**Workflow:**
+
+1. The dashboard scans all R installations on the machine automatically — no configuration needed.
+2. Select two installations from the sidebar dropdowns (labelled A and B).
+3. Click **Compare** — a summary strip shows counts of identical, missing, and version-mismatched packages. The table lists differences first.
+4. Click a sync button:
+   - **Copy A → B** — installs or upgrades packages from A into B
+   - **Copy B → A** — installs or upgrades packages from B into A
+   - **Two-Way Sync** — brings both installations to parity in both directions
+5. A confirmation dialog shows the package count and an estimated time. Confirm to start.
+6. The log pane shows real-time progress: each package, its pak spec, success or failure, and a post-sync comparison refresh.
+
+The first sync on a machine can take 1–2 minutes while pak builds its metadata cache. Subsequent syncs are faster.
 
 The Advanced tab exposes `manifest()` output and lets you inspect any detected R installation's full package list.
 
@@ -299,10 +305,11 @@ The Advanced tab exposes `manifest()` output and lets you inspect any detected R
 
 ## Tips
 
-- courieR skips base and recommended packages — only user-installed packages are migrated
+- `hub()` is a short alias for `hub()` — both launch the dashboard
+- courieR skips base and recommended packages automatically — only user-installed packages are compared and migrated
 - `ship()` uses `pak` under the hood, which resolves dependencies automatically
-- The source R installation does not need extra packages; the target R
-  installation needs `pak` available because installation runs under the target R
-- GitHub packages require the source repository to be public, or a `GITHUB_PAT` to be set
+- The source R installation does not need any extra packages; only the target R needs `pak` installed, because installation runs under the target R process
+- GitHub packages require the source repository to be public, or a `GITHUB_PAT` to be set in the environment
 - If a package fails, check `result$results` — the `message` column has the pak error
+- Use `dry_run = TRUE` before any large migration to review the plan without installing anything
 - On Linux without rig, `find_routes()` may only detect the R on `$PATH`; pass additional paths via `search_paths` if needed

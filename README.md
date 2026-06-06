@@ -2,6 +2,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/lennon-li/courieR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/lennon-li/courieR/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/lennon-li/courieR/actions/workflows/pkgdown.yaml/badge.svg)](https://lennon-li.github.io/courieR/)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 
@@ -9,18 +10,17 @@ courieR syncs installed R packages between R versions on the same machine — mi
 
 ## Installation
 
-Install from GitHub (CRAN submission pending):
+Install from GitHub (CRAN submission in progress):
 
 ```r
-# install.packages("remotes")
-remotes::install_github("lennon-li/courieR")
+pak::pkg_install("lennon-li/courieR")
 ```
 
 ## Quickstart
 
 ```r
 library(courieR)
-open_hub()   # launches the Shiny dashboard
+hub()   # launches the Shiny dashboard
 ```
 
 The dashboard detects all R installations on your machine, displays them in a header bar, and lets you compare and sync packages between any two.
@@ -48,7 +48,7 @@ R 4.4.1  ──▶  compare()  ──▶  missing / outdated packages found
 
 | Function | What it does |
 |---|---|
-| `open_hub()` | Launch the Shiny dashboard |
+| `hub()` | Launch the Shiny dashboard |
 | `find_routes()` | Detect all R installations on the system |
 | `manifest()` | List packages installed in an R version |
 | `inventory()` | Compare two package libraries |

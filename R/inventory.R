@@ -1,8 +1,29 @@
 #' Compare two package libraries
 #'
-#' @param source_pkgs data.table from `manifest`
-#' @param target_pkgs data.table from `manifest`
-#' @return A list of data.tables and a summary data.frame
+#' Takes two package manifests (from [manifest()]) and classifies every
+#' source package as missing, outdated, newer, or the same relative to the
+#' target.
+#'
+#' @param source_pkgs `data.table` or `data.frame` from [manifest()],
+#'   representing the installation you are copying packages *from*.
+#' @param target_pkgs `data.table` or `data.frame` from [manifest()],
+#'   representing the installation you are copying packages *into*.
+#' @return A named list with the following elements:
+#'   \describe{
+#'     \item{`missing`}{Packages in source that are absent from target.}
+#'     \item{`outdated`}{Packages where the source version is newer than the
+#'       target version.}
+#'     \item{`newer`}{Packages where the target already has a newer version
+#'       than the source.}
+#'     \item{`same`}{Packages at identical versions in both installations.}
+#'     \item{`comparison`}{Full merged `data.table` of all source packages
+#'       with a `status` column (`"missing"`, `"outdated"`, `"newer"`,
+#'       or `"same"`).}
+#'     \item{`summary`}{One-row `data.frame` with counts: `missing`,
+#'       `outdated`, `newer`, `same`, `total_source`.}
+#'   }
+#'   Each data.table includes columns `package`, `version.x` (source
+#'   version), `version.y` (target version), and `source`.
 #' @examples
 #' src <- data.table::data.table(
 #'   package  = c("dplyr", "ggplot2"),

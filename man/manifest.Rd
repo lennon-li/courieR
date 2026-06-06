@@ -12,19 +12,29 @@ manifest(
 )
 }
 \arguments{
-\item{rscript_path}{Path to the Rscript executable. Defaults to current session.}
+\item{rscript_path}{Full path to an \code{Rscript} executable. Defaults to the
+current R session. Use \code{\link{find_routes}} to get paths for other
+installations.}
 
-\item{lib_path}{Library path to query. Defaults to default \code{.libPaths()} of the target R.}
+\item{lib_path}{Library path to query within the target R. Defaults to the
+first element of \code{.libPaths()} in that R installation.}
 
-\item{format}{Return format}
+\item{format}{\code{"data.table"} (default) or \code{"data.frame"}.}
 
-\item{timeout_sec}{Timeout for subprocess}
+\item{timeout_sec}{Maximum seconds to wait for the subprocess. Increase
+on slow machines or network-mounted drives. Default \code{30}.}
 }
 \value{
-data.table
+A \code{data.table} (or \code{data.frame}) with one row per user-installed
+package and columns: \code{package}, \code{version}, \code{source} (\code{"CRAN"},
+\code{"GitHub"}, \code{"Bioconductor"}, or \code{"unknown"}), \code{remotetype},
+\code{remoteusername}, \code{remoterepo}, \code{libpath}. Base and recommended packages
+are never included in the output.
 }
 \description{
-List packages installed in a library, optionally via a different R executable
+Runs a subprocess under the given R executable and returns all
+user-installed packages. Base and recommended packages are excluded
+automatically.
 }
 \examples{
 \donttest{

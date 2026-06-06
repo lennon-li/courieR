@@ -1,10 +1,22 @@
-#' List packages installed in a library, optionally via a different R executable
+#' List packages installed in a library
 #'
-#' @param rscript_path Path to the Rscript executable. Defaults to current session.
-#' @param lib_path Library path to query. Defaults to default `.libPaths()` of the target R.
-#' @param format Return format
-#' @param timeout_sec Timeout for subprocess
-#' @return data.table
+#' Runs a subprocess under the given R executable and returns all
+#' user-installed packages. Base and recommended packages are excluded
+#' automatically.
+#'
+#' @param rscript_path Full path to an `Rscript` executable. Defaults to the
+#'   current R session. Use [find_routes()] to get paths for other
+#'   installations.
+#' @param lib_path Library path to query within the target R. Defaults to the
+#'   first element of `.libPaths()` in that R installation.
+#' @param format `"data.table"` (default) or `"data.frame"`.
+#' @param timeout_sec Maximum seconds to wait for the subprocess. Increase
+#'   this on slow machines or network-mounted drives. Default `30`.
+#' @return A `data.table` (or `data.frame`) with one row per user-installed
+#'   package and columns: `package`, `version`, `source` (`"CRAN"`,
+#'   `"GitHub"`, `"Bioconductor"`, or `"unknown"`), `remotetype`,
+#'   `remoteusername`, `remoterepo`, `libpath`. Base and recommended packages
+#'   are never included in the output.
 #' @examples
 #' \donttest{
 #'   pkgs <- manifest()
@@ -37,6 +49,20 @@ suppressPackageStartupMessages({
                        fields = c("Package","Version","Priority","Repository","RemoteType","RemoteUsername","RemoteRepo")),
     stringsAsFactors = FALSE
   )
+  if (nrow(pkgs) == 0) {
+    cat("__COURIERS_MANIFEST_START__\n[]\n__COURIERS_MANIFEST_END__\n")
+    q("no", status = 0)
+  }
+  base_lib      <- tolower(normalizePath(.Library, winslash = "/", mustWork = FALSE))
+  lib_norm      <- tolower(normalizePath(pkgs$LibPath, winslash = "/", mustWork = FALSE))
+  base_pkg_list <- tryCatch(
+    rownames(installed.packages(priority = c("base", "recommended"))),
+    error = function(e) character(0)
+  )
+  is_base <- (!is.na(pkgs$Priority) & pkgs$Priority %in% c("base", "recommended")) |
+             lib_norm == base_lib |
+             pkgs$Package %in% base_pkg_list
+  pkgs <- pkgs[!is_base, , drop = FALSE]
   if (nrow(pkgs) == 0) {
     cat("__COURIERS_MANIFEST_START__\n[]\n__COURIERS_MANIFEST_END__\n")
     q("no", status = 0)

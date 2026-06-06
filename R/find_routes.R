@@ -213,7 +213,7 @@ find_routes <- function(search_paths = NULL) {
   res_list <- lapply(candidates, function(rscript) {
     script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
     out <- tryCatch(
-      processx::run(rscript, c("--vanilla", "-e", script), timeout = 5, error_on_status = FALSE),
+      processx::run(rscript, c("--vanilla", "-e", script), timeout = 3, error_on_status = FALSE),
       error = function(e) NULL
     )
 

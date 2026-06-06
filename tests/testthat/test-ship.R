@@ -112,3 +112,41 @@ test_that("ship errors on nonexistent target path", {
     "Target Rscript not found"
   )
 })
+
+test_that("ship calls log_callback before and after pak subprocess", {
+  skip_if_not_installed("mockery")
+
+  calls <- character()
+  cb <- function(msg) calls <<- c(calls, msg)
+  manifest_calls <- 0L
+
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  mockery::stub(ship, "manifest", function(...) {
+    manifest_calls <<- manifest_calls + 1L
+    if (manifest_calls == 3L) {
+      return(data.table::data.table(package = "pkgA", version = "1.0", source = "CRAN"))
+    }
+    data.table::data.table()
+  })
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "processx::run", function(command, args, stdout_line_callback = NULL, stderr_line_callback = NULL, ...) {
+    if ("-e" %in% args) {
+      return(list(status = 0L, stdout = tempdir(), stderr = "", timeout = FALSE))
+    }
+    if (is.function(stderr_line_callback)) stderr_line_callback("pak activity")
+    list(status = 0L, stdout = "", stderr = "", timeout = FALSE)
+  })
+
+  res <- ship("dummy_src", "dummy_tgt", dry_run = FALSE, log_callback = cb)
+
+  expect_equal(res$results$status, "success")
+  expect_true(any(grepl("Running pak", calls)))
+  expect_true(any(grepl("pak activity", calls)))
+  expect_true(any(grepl("finished successfully", calls)))
+})

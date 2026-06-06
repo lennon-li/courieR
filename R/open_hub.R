@@ -1,12 +1,19 @@
-#' Launch the courieR delivery hub dashboard
+#' Launch the courieR dashboard
 #'
-#' @param project_path Optional path to pre-fill in the app
-#' @param port Optional port to run the app on
-#' @param launch.browser Logical. Whether to open the browser
+#' Opens the Shiny dashboard in your browser. The dashboard detects all R
+#' installations on the machine and lets you compare and sync packages between
+#' any two of them without writing any code.
+#'
+#' `hub()` is a short alias for `open_hub()`.
+#'
+#' @param project_path Reserved; currently unused.
+#' @param port Port to run the Shiny app on. `NULL` picks a random available port.
+#' @param launch.browser Whether to open the system browser automatically. Default `TRUE`.
 #' @return Called for its side effect of launching a Shiny application.
 #' @examples
 #' if (interactive()) {
-#'   open_hub()
+#'   hub()        # short form
+#'   open_hub()   # same thing
 #' }
 #' @export
 open_hub <- function(project_path = NULL, port = NULL, launch.browser = TRUE) {
@@ -33,4 +40,10 @@ open_hub <- function(project_path = NULL, port = NULL, launch.browser = TRUE) {
 
   shiny::shinyOptions(courieR_project_path = project_path)
   shiny::runApp(app_dir, port = port, launch.browser = launch.browser)
+}
+
+#' @rdname open_hub
+#' @export
+hub <- function(project_path = NULL, port = NULL, launch.browser = TRUE) {
+  open_hub(project_path = project_path, port = port, launch.browser = launch.browser)
 }

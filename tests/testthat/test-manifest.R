@@ -38,3 +38,14 @@ test_that("manifest temp file is cleaned up", {
   tmpfiles_after <- length(fs::dir_ls(tempdir(), glob = "courieR_manifest*"))
   expect_equal(tmpfiles_after, tmpfiles_before)
 })
+
+test_that("manifest excludes known base packages (translations, base, utils)", {
+  skip_on_cran()
+  res <- manifest(format = "data.table", timeout_sec = 120L)
+  base_pkg_names <- c(
+    "translations", "base", "utils", "stats", "methods",
+    "graphics", "grDevices", "datasets", "tools"
+  )
+  found <- intersect(res$package, base_pkg_names)
+  expect_length(found, 0L)
+})

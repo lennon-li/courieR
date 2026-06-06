@@ -1,42 +1,46 @@
-## Resubmission (0.2.2)
+## Resubmission (0.2.3)
 
-This is a resubmission addressing feedback from the CRAN MKL supplementary check
-and fixing correctness issues found during review.
+This is a resubmission with bug fixes, performance improvements, and UX enhancements.
 
-### Changes since 0.2.1
+### Changes since 0.2.2
 
-* Added `skip_on_cran()` to the remaining `manifest()` test in `test-manifest.R`
-  that still spawned a subprocess on CRAN (`manifest handles empty library gracefully`).
-  This completes the CRAN-side guarding of all tests that execute `manifest()`.
+* `manifest()` now excludes base and recommended packages via three guards: Priority
+  field, case-insensitive library path comparison (fixes silent failures on Windows
+  where path capitalisation differs), and a name list from
+  `installed.packages(priority = c("base", "recommended"))`. Packages such as
+  `translations` can no longer appear in a sync plan.
 
-### Changes since 0.2.0
+* `ship()` gains an optional `log_callback` argument (function of one character
+  argument) for real-time progress messages from the pak subprocess. Existing callers
+  are unaffected; the argument defaults to `NULL`.
 
-* Added `skip_on_cran()` to all tests in `test-manifest.R` that call `manifest()`.
-  These tests spawn a subprocess to scan R libraries, which is too slow and
-  environment-dependent for CRAN check machines (caused 3 test failures on the
-  MKL Fedora supplementary check).
+* `hub()` added as a short exported alias for `open_hub()`.
 
-* Fixed 8 correctness bugs in the core API (inspect_shipment, manifest, wrap, ship,
-  find_routes, inventory) found during pre-release code review.
+* `.onAttach()` added: prints the package version and a one-line usage hint when the
+  package is attached. Uses `packageStartupMessage()` so it respects
+  `suppressPackageStartupMessages()`.
 
-* Moved Shiny-related packages (shiny, bslib, bsicons, DT) from Imports to Suggests.
-  The core CLI workflow (find_routes, manifest, inventory, ship) has no Shiny
-  dependency. open_hub() checks at runtime and emits a clear install message if
-  dashboard packages are missing.
+* `find_routes()` per-candidate subprocess timeout reduced from 5 s to 3 s.
 
-* Added in-app error reporter: unhandled errors in the Shiny dashboard surface a
-  modal with a pre-filled GitHub issue link so users can report bugs.
+* `shinyjs` added to Imports (was missing; required for the real-time log DOM updates
+  in the Sync dashboard).
 
-* Expanded the vignette with a full CLI workflow walkthrough.
+* Sync dashboard: `withProgress()` / `incProgress()` / `shiny:::flushReact()` /
+  `later::run_now()` removed. Replaced with `shinyjs::runjs()` for immediate DOM
+  log appends and a `reactiveVal`-driven inline progress bar.
 
 ## Test environments
 
-* local Windows 11, R 4.5.0
+* local Windows 11, R 4.6.0 and R 4.5.2
 * GitHub Actions: ubuntu-latest (release, devel), windows-latest (release, devel), macos-latest (release)
 
 ## R CMD check results
 
-0 errors | 0 warnings | 0 notes
+0 errors | 0 warnings | 1 note
+
+* NOTE: Imports includes packages only used in the Shiny app (`shiny`, `bslib`,
+  `bsicons`, `DT`, `shinyjs`). These are intentional runtime dependencies of
+  `open_hub()` / `hub()` and are checked at runtime before launching the app.
 
 ## Reverse dependencies
 
@@ -47,18 +51,16 @@ There are no reverse dependencies.
 * `find_routes()` and `ship()` examples are wrapped in `\dontrun{}` because they
   require multiple R installations on the same machine, which is not guaranteed in
   CRAN check environments.
-* `rig_install()` example is `\dontrun{}` because it would download and install an R version.
-* `dispatch()` and `open_hub()` examples use `\dontrun{}` because they launch
-  background processes or Shiny applications.
-* `rig_list()` and `manifest()` examples use `\donttest{}` because they may rely on
-  external tools (rig) or subprocess calls that are safe but slow.
-* `manifest()` runs package scanning in a subprocess. The subprocess script is
-  assembled and written to a temp file which is cleaned via `on.exit()`.
-* Tests that execute `manifest()` are skipped on CRAN because subprocess stdout/stderr
-  handling can be environment-dependent on supplementary check machines.
-* `ship()` uses `pak::pkg_install()` from the current R session to install into the
-  target library. This is intentional: the source R need not have pak installed.
+* `rig_install()` example is `\dontrun{}` because it downloads and installs an R version.
+* `hub()` and `open_hub()` examples use `if (interactive())` because they launch
+  a Shiny application.
+* `manifest()` examples use `\donttest{}` because they spawn a subprocess.
+* `manifest()` runs package scanning in a subprocess. The script is written to a temp
+  file and cleaned via `on.exit()`. All tests calling `manifest()` are guarded with
+  `skip_on_cran()`.
+* `ship()` runs `pak::pkg_install()` under the target R executable in a subprocess.
   When `dry_run = TRUE`, no installation occurs.
-* All subprocess calls have timeouts. All temporary files are cleaned via `on.exit()`.
-* The package does not change `options()` or `par()`. No startup messages are emitted
-  at package load.
+* All subprocess calls have explicit timeouts. All temporary files are cleaned via
+  `on.exit()`.
+* The package sets no `options()` or `par()`. The `.onAttach()` startup message uses
+  `packageStartupMessage()` and is suppressible.

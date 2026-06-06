@@ -1,7 +1,7 @@
 Package: courieR
 Type: Package
 Title: Migrate Installed R Packages Between R Versions
-Version: 0.2.4
+Version: 0.2.3
 Authors@R:
     person("Lennon", "Li", , "yeli@biostats.ai", role = c("aut", "cre"))
 Description: Detects all R installations on the current machine and migrates
@@ -11,7 +11,7 @@ Description: Detects all R installations on the current machine and migrates
     version using 'pak'. Includes a Shiny dashboard (open_hub()) for interactive
     one-way and two-way migration.
 License: MIT + file LICENSE
-URL: https://github.com/lennon-li/courieR
+URL: https://lennon-li.github.io/courieR/, https://github.com/lennon-li/courieR
 BugReports: https://github.com/lennon-li/courieR/issues
 Language: en-US
 Encoding: UTF-8
@@ -28,6 +28,7 @@ Imports:
     cli (>= 3.6.0),
     data.table (>= 1.14.0),
     shiny (>= 1.8.0),
+    shinyjs (>= 2.1.0),
     bslib (>= 0.7.0),
     bsicons (>= 0.1.2),
     DT (>= 0.31)
@@ -37,5 +38,6 @@ Suggests:
     withr (>= 3.0.0),
     mockery (>= 0.4.4),
     knitr (>= 1.45),
-    rmarkdown (>= 2.26)
+    rmarkdown (>= 2.26),
+    pkgdown (>= 2.0.0)
 VignetteBuilder: knitr

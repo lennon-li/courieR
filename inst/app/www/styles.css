@@ -844,3 +844,27 @@ body {
   color: #721c24;
   margin-bottom: 0.5rem;
 }
+
+.sync-inline-progress {
+  margin: 0 0 0.85rem;
+}
+
+.sync-progress-label {
+  color: #274158;
+  font-size: 0.85rem;
+  font-weight: 800;
+  margin-bottom: 0.35rem;
+}
+
+.sync-inline-progress .progress {
+  height: 0.75rem;
+  border-radius: 999px;
+  background: #edf3f8;
+  overflow: hidden;
+}
+
+.sync-inline-progress .progress-bar {
+  background: linear-gradient(90deg, #5f4ab4 0%, #8a52c8 100%);
+  font-size: 0.65rem;
+  font-weight: 800;
+}

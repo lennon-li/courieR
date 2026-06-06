@@ -10,27 +10,54 @@ ship(
   packages = NULL,
   dry_run = FALSE,
   upgrade = FALSE,
+  log_callback = NULL,
   ...
 )
 }
 \arguments{
-\item{source_path}{Rscript path of the source installation}
+\item{source_path}{Full path to the \code{Rscript} executable of the source
+installation (the one you are copying packages \emph{from}). Use
+\code{\link{find_routes}} to discover available paths.}
 
-\item{target_path}{Rscript path of the target installation}
+\item{target_path}{Full path to the \code{Rscript} executable of the target
+installation (the one you are installing packages \emph{into}). The target
+R must have \code{pak} installed.}
 
-\item{packages}{Optional character vector of packages to ship. If NULL, ships all non-base missing/outdated packages.}
+\item{packages}{Character vector of package names to act on. If \code{NULL}
+(the default), all packages that are missing from or outdated in the
+target are included.}
 
-\item{dry_run}{Logical. If TRUE, return plan without installing.}
+\item{dry_run}{If \code{TRUE}, build and return the installation plan without
+installing anything. Use this to review what will happen before
+committing to a sync.}
 
-\item{upgrade}{Logical. Passed to pak}
+\item{upgrade}{If \code{TRUE}, packages already present in the target but at an
+older version than the source are upgraded. If \code{FALSE} (the default),
+only packages missing from the target are installed.}
 
-\item{...}{Extra arguments}
+\item{log_callback}{Optional function of one argument. When provided, it is
+called with a single character string for each progress message emitted
+during the pak subprocess. Useful for surfacing progress in a UI.}
+
+\item{...}{Reserved for future arguments.}
 }
 \value{
-A list with shipment results
+A named list with the following elements:
+\describe{
+  \item{\code{plan}}{\code{data.table} of planned actions with columns \code{package},
+    \code{action} (\code{"install"} or \code{"upgrade"}), \code{version.x} (source version),
+    \code{version.y} (target version, \code{NA} if missing), and \code{pak_spec}.}
+  \item{\code{results}}{\code{data.table} of per-package outcomes with columns
+    \code{package}, \code{status} (\code{"success"} or \code{"error"}), and \code{message}.}
+  \item{\code{comparison}}{The raw \code{\link{inventory}} comparison table.}
+  \item{\code{dry_run}}{\code{TRUE} if no packages were installed.}
+  \item{\code{elapsed_sec}}{Total wall-clock time in seconds.}
+}
 }
 \description{
-Ship packages between R installations
+Compares the package libraries of two R installations and installs missing
+or outdated packages into the target using
+\code{\link[pak:pkg_install]{pak::pkg_install()}} running under the target R executable.
 }
 \section{Safety}{
 
