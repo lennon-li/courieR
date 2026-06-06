@@ -32,22 +32,22 @@ copy_packages <- function(plan, target_lib, log_callback = NULL) {
     src <- plan$libpath[[i]]
 
     if (is.na(src) || !nzchar(src)) {
-      emit(sprintf("[skip] %s — no source path available", pkg))
+      emit(sprintf("[skip] %s - no source path available", pkg))
       return(list(package = pkg, status = "skipped", message = "no source libpath"))
     }
 
     if (!dir.exists(src)) {
-      emit(sprintf("[error] %s — source directory not found: %s", pkg, src))
+      emit(sprintf("[error] %s - source directory not found: %s", pkg, src))
       return(list(package = pkg, status = "error", message = sprintf("source not found: %s", src)))
     }
 
     dst <- file.path(target_lib, pkg)
     tryCatch({
       fs::dir_copy(src, dst, overwrite = TRUE)
-      emit(sprintf("[ok] %s — copied", pkg))
+      emit(sprintf("[ok] %s - copied", pkg))
       list(package = pkg, status = "success", message = "copied")
     }, error = function(e) {
-      emit(sprintf("[error] %s — %s", pkg, conditionMessage(e)))
+      emit(sprintf("[error] %s - %s", pkg, conditionMessage(e)))
       list(package = pkg, status = "error", message = conditionMessage(e))
     })
   })

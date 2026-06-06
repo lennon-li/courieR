@@ -316,7 +316,7 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
     plan_copy <- .copy_plan(plan)
     .warn_cross_major_compiled(plan_copy, source_path, target_path, log_callback = log_callback)
     copy_res <- copy_packages(plan_copy, target_lib, log_callback = log_callback)
-    fallback_pkgs <- copy_res[copy_res$status != "success", package]
+    fallback_pkgs <- copy_res[["package"]][copy_res[["status"]] != "success"]
     if (length(fallback_pkgs) > 0) {
       fallback <- data.table::copy(plan[plan$package %in% fallback_pkgs, ])
       pinned_versions <- if ("version.x" %in% names(fallback)) fallback$version.x else fallback$version

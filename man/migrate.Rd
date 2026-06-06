@@ -4,7 +4,7 @@
 \alias{migrate}
 \title{Migrate packages between two R installations in one call}
 \usage{
-migrate(from, to, dry_run = FALSE, upgrade = TRUE, ...)
+migrate(from, to, dry_run = FALSE, upgrade = TRUE, mode = "online", ...)
 }
 \arguments{
 \item{from}{Version string or Rscript path of the source installation
@@ -19,12 +19,12 @@ Default \code{FALSE}.}
 \item{upgrade}{If \code{TRUE}, packages already in the target but at an older
 version are upgraded as well. Default \code{TRUE}.}
 
-\item{...}{Additional arguments passed to \code{\link[=ship]{ship()}}.}
-
 \item{mode}{Transfer mode passed to \code{\link[=ship]{ship()}}: \code{"online"} (default —
 reinstall via pak), \code{"offline"} (file-copy only, skip packages without a
 valid source path), or \code{"preserve"} (copy for exact version, fall back to a
 pinned pak spec on failure).}
+
+\item{...}{Additional arguments passed to \code{\link[=ship]{ship()}}.}
 }
 \value{
 The same named list returned by \code{\link[=ship]{ship()}}: \code{plan}, \code{results},

@@ -29,7 +29,7 @@
 #'   table(result$results$status)
 #' }
 #' @export
-migrate <- function(from, to, dry_run = FALSE, upgrade = TRUE, ...) {
+migrate <- function(from, to, dry_run = FALSE, upgrade = TRUE, mode = "online", ...) {
   routes <- find_routes()
 
   if (nrow(routes) == 0) {
@@ -61,6 +61,7 @@ migrate <- function(from, to, dry_run = FALSE, upgrade = TRUE, ...) {
     target_path = tgt_path,
     dry_run     = dry_run,
     upgrade     = upgrade,
+    mode        = mode,
     ...
   )
 }
