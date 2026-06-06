@@ -70,11 +70,14 @@ find_routes <- function(search_paths = NULL) {
   candidates <- character()
   windows_rscript_paths <- function(paths) {
     paths <- as.character(paths)
-    x64 <- fs::path(paths, "bin", "x64", "Rscript.exe")
+    x64  <- fs::path(paths, "bin", "x64", "Rscript.exe")
     root <- fs::path(paths, "bin", "Rscript.exe")
-
-    # Prefer x64 on Windows. Some root-level launchers mis-handle `-e` quoting.
-    unique(c(as.character(x64), as.character(root)))
+    # Emit only one path per install root: x64 binary when present, otherwise
+    # the root-level launcher. Emitting both causes duplicate version rows that
+    # path_real() cannot collapse (the launcher is not a reparse point).
+    vapply(seq_along(paths), function(i) {
+      if (fs::file_exists(x64[[i]])) as.character(x64[[i]]) else as.character(root[[i]])
+    }, character(1L))
   }
   windows_document_r_roots <- function() {
     profile <- Sys.getenv("USERPROFILE")

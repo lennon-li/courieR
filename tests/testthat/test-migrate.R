@@ -21,6 +21,10 @@ test_that("migrate dry_run returns a plan without installing", {
   skip_on_cran()
   routes <- find_routes()
   skip_if(nrow(routes) < 2, "Need at least 2 R installations")
+  skip_if(
+    length(unique(routes$version)) < 2,
+    "Need at least 2 R installations with distinct versions"
+  )
   result <- migrate(
     from    = routes$version[[1]],
     to      = routes$version[[2]],
