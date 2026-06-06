@@ -48,9 +48,10 @@ reference:
 
   - title: Core workflow
     desc: >
-      The four functions that form the CLI pipeline:
-      discover → scan → compare → migrate.
+      The CLI pipeline: discover → scan → compare → migrate.
+      Use `migrate()` for the one-call path or `ship()` for full control.
     contents:
+      - migrate
       - find_routes
       - manifest
       - inventory

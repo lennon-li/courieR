@@ -2,6 +2,7 @@
 
 ## New features
 
+* `migrate(from, to)` — one-call CLI migration. Pass version strings (`"4.5.2"`, `"4.6.0"`) or full Rscript paths; courieR resolves the installations and runs `ship()` automatically.
 * `hub()` — short alias for `open_hub()`. Run `hub()` to launch the dashboard with less typing.
 * `library(courieR)` now prints the version number and a reminder to run `hub()` or see `?ship`.
 * `ship()` gains a `log_callback` argument for real-time progress messages from the pak subprocess, including a notice when first-time metadata loading may take 1–2 minutes.

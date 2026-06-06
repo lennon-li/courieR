@@ -214,19 +214,29 @@ result$plan[, c("package", "source", "pak_spec")]
 
 ### One-way migration (old R → new R)
 
+The shortest path uses `migrate()`, which looks up installations by version
+string so you don't need to handle paths yourself:
+
 ```{r}
 library(courieR)
 
+# dry run first
+migrate("4.5.2", "4.6.0", dry_run = TRUE)
+
+# for real
+result <- migrate("4.5.2", "4.6.0")
+table(result$results$status)
+```
+
+For more control — filtering by package, custom paths, or progress callbacks —
+use `ship()` directly:
+
+```{r}
 routes  <- find_routes()
 old_r   <- routes$rscript_path[!routes$is_current][1]
 new_r   <- routes$rscript_path[routes$is_current]
 
-# dry run
-ship(source_path = old_r, target_path = new_r, dry_run = TRUE, upgrade = TRUE)
-
-# for real
 result <- ship(source_path = old_r, target_path = new_r, upgrade = TRUE)
-result$summary
 ```
 
 ### Two-way sync (keep two R versions in parity)

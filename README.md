@@ -20,7 +20,9 @@ pak::pkg_install("lennon-li/courieR")
 
 ```r
 library(courieR)
-hub()   # launches the Shiny dashboard
+hub()                          # point-and-click dashboard
+
+migrate("4.5.2", "4.6.0")     # one-line CLI migration
 ```
 
 The dashboard detects all R installations on your machine, displays them in a header bar, and lets you compare and sync packages between any two.
@@ -49,10 +51,11 @@ R 4.4.1  ──▶  compare()  ──▶  missing / outdated packages found
 | Function | What it does |
 |---|---|
 | `hub()` | Launch the Shiny dashboard |
+| `migrate(from, to)` | One-call CLI migration between two R versions |
 | `find_routes()` | Detect all R installations on the system |
 | `manifest()` | List packages installed in an R version |
 | `inventory()` | Compare two package libraries |
-| `ship()` | Copy packages from one R to another (CLI) |
+| `ship()` | Full-control migration (custom paths, callbacks) |
 
 ## Dashboard — Sync Tab
 
