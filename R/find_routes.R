@@ -213,7 +213,16 @@ find_routes <- function(search_paths = NULL) {
   res_list <- lapply(candidates, function(rscript) {
     script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
     out <- tryCatch(
-      processx::run(rscript, c("--vanilla", "-e", script), timeout = 3, error_on_status = FALSE),
+      # Pass R_HOME="" so sub-R processes (e.g. rig-installed versions) do not
+      # see the parent's R_HOME and emit "WARNING: ignoring environment value
+      # of R_HOME" to stdout, which would corrupt the parsed output.
+      # "current" inherits all other env vars; the named R_HOME="" overrides it.
+      processx::run(
+        rscript, c("--vanilla", "-e", script),
+        env    = c(R_HOME = "", "current"),
+        timeout = 3,
+        error_on_status = FALSE
+      ),
       error = function(e) NULL
     )
 
@@ -222,8 +231,13 @@ find_routes <- function(search_paths = NULL) {
     parts <- strsplit(trimws(out$stdout), "\\|\\|SEP\\|\\|")[[1]]
     if (length(parts) < 3) return(NULL)
 
+    # Strip any leading non-numeric content (e.g. stray WARNING lines) from
+    # the major/minor parts before assembling the version string.
+    major <- sub(".*?(\\d+)\\s*$", "\\1", trimws(parts[1]))
+    minor <- trimws(parts[2])
+
     list(
-      version      = paste(trimws(parts[1]), trimws(parts[2]), sep = "."),
+      version      = paste(major, minor, sep = "."),
       rscript_path = rscript,
       is_current   = FALSE
     )
