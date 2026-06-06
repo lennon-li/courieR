@@ -2,6 +2,11 @@
 
 ## New features
 
+* `ship()` and `migrate()` gain a `mode` argument:
+  - `"online"` (default) — reinstall packages via pak from CRAN/GitHub/Bioconductor.
+  - `"offline"` — copy package directories by file; packages with no valid source path are skipped and reported.
+  - `"preserve"` — copy first to keep exact versions; fall back to a pinned pak spec (`pkg@version`) for packages that cannot be copied.
+  The dashboard Sync tab exposes the same three options as a dropdown.
 * `migrate(from, to)` — one-call CLI migration. Pass version strings (`"4.5.2"`, `"4.6.0"`) or full Rscript paths; courieR resolves the installations and runs `ship()` automatically.
 * `hub()` — short alias for `open_hub()`. Run `hub()` to launch the dashboard with less typing.
 * `library(courieR)` now prints the version number and a reminder to run `hub()` or see `?ship`.

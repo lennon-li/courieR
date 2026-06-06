@@ -318,6 +318,8 @@ The Advanced tab exposes `manifest()` output and lets you inspect any detected R
 - `hub()` is a short alias for `hub()` — both launch the dashboard
 - courieR skips base and recommended packages automatically — only user-installed packages are compared and migrated
 - `ship()` uses `pak` under the hood, which resolves dependencies automatically
+- Use `mode = "offline"` when you have no internet access — courieR copies package directories directly. Packages without a local source path are reported as skipped
+- Use `mode = "preserve"` to keep exact version numbers; courieR copies where possible and pins the version in the pak spec otherwise
 - The source R installation does not need any extra packages; only the target R needs `pak` installed, because installation runs under the target R process
 - GitHub packages require the source repository to be public, or a `GITHUB_PAT` to be set in the environment
 - If a package fails, check `result$results` — the `message` column has the pak error
