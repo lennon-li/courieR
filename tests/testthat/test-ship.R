@@ -77,20 +77,17 @@ test_that("ship installs through target Rscript", {
       comparison = data.table::data.table()
     )
   })
-  mockery::stub(ship, "processx::run", function(command, args, ...) {
-    process_calls[[length(process_calls) + 1L]] <<- list(command = command, args = args)
-    if ("-e" %in% args) {
-      return(list(status = 0L, stdout = tempdir(), stderr = ""))
-    }
-    list(status = 0L, stdout = "", stderr = "")
+  mockery::stub(ship, "find_target_lib", function(...) tempdir())
+  mockery::stub(ship, ".run_pak_plan", function(plan, target_path, ...) {
+    process_calls[[length(process_calls) + 1L]] <<- list(command = target_path, plan = plan)
+    data.table::data.table(package = plan$package, status = "success", message = "pak completed")
   })
 
   res <- ship("dummy_src", "dummy_tgt", dry_run = FALSE)
 
   expect_equal(res$results$status, "success")
-  expect_equal(length(process_calls), 2L)
-  expect_equal(process_calls[[2L]]$command, "dummy_tgt")
-  expect_false("-e" %in% process_calls[[2L]]$args)
+  expect_equal(length(process_calls), 1L)
+  expect_equal(process_calls[[1L]]$command, "dummy_tgt")
 })
 
 test_that("ship errors on nonexistent source path", {
@@ -135,12 +132,12 @@ test_that("ship calls log_callback before and after pak subprocess", {
       comparison = data.table::data.table()
     )
   })
-  mockery::stub(ship, "processx::run", function(command, args, stdout_line_callback = NULL, stderr_line_callback = NULL, ...) {
-    if ("-e" %in% args) {
-      return(list(status = 0L, stdout = tempdir(), stderr = "", timeout = FALSE))
-    }
-    if (is.function(stderr_line_callback)) stderr_line_callback("pak activity")
-    list(status = 0L, stdout = "", stderr = "", timeout = FALSE)
+  mockery::stub(ship, "find_target_lib", function(...) tempdir())
+  mockery::stub(ship, ".run_pak_plan", function(plan, target_path, log_callback = NULL, ...) {
+    log_callback("Running pak in the target R installation; first-time metadata loading may take 1-2 minutes.")
+    log_callback("pak activity")
+    log_callback("pak subprocess finished successfully.")
+    data.table::data.table(package = plan$package, status = "success", message = "pak completed")
   })
 
   res <- ship("dummy_src", "dummy_tgt", dry_run = FALSE, log_callback = cb)
@@ -149,4 +146,49 @@ test_that("ship calls log_callback before and after pak subprocess", {
   expect_true(any(grepl("Running pak", calls)))
   expect_true(any(grepl("pak activity", calls)))
   expect_true(any(grepl("finished successfully", calls)))
+})
+
+test_that("ship() mode='offline' with dry_run=TRUE returns correctly", {
+  skip_if_not_installed("mockery")
+
+  mockery::stub(ship, "manifest", function(...) data.table::data.table())
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+
+  result <- ship("dummy_src", "dummy_tgt", mode = "offline", dry_run = TRUE)
+  expect_true(result$dry_run)
+})
+
+test_that("ship() plan has mode column", {
+  skip_if_not_installed("mockery")
+
+  mockery::stub(ship, "manifest", function(...) data.table::data.table())
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+
+  result <- ship("dummy_src", "dummy_tgt", dry_run = TRUE, mode = "online")
+  expect_true("mode" %in% names(result$plan))
+  expect_true(all(result$plan$mode == "online"))
+})
+
+test_that("ship() rejects invalid mode", {
+  skip_if_not_installed("mockery")
+
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  expect_error(
+    ship("dummy_src", "dummy_tgt", mode = "turbo"),
+    "mode"
+  )
 })
