@@ -142,8 +142,7 @@ full control.
 - [`find_routes()`](https://lennon-li.github.io/courieR/reference/find_routes.md)
   : Detect R installations on the system
 - [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md)
-  : List packages installed in a library, optionally via a different R
-  executable
+  : List packages installed in a library
 - [`inventory()`](https://lennon-li.github.io/courieR/reference/inventory.md)
   : Compare two package libraries
 - [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) :

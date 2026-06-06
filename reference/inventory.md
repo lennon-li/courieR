@@ -1,7 +1,7 @@
 # Compare two package libraries
 
 Takes two package manifests (from
-[`manifest`](https://lennon-li.github.io/courieR/reference/manifest.md))
+[`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md))
 and classifies every source package as missing, outdated, newer, or the
 same relative to the target.
 
@@ -16,13 +16,13 @@ inventory(source_pkgs, target_pkgs)
 - source_pkgs:
 
   `data.table` or `data.frame` from
-  [`manifest`](https://lennon-li.github.io/courieR/reference/manifest.md),
+  [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md),
   representing the installation you are copying packages *from*.
 
 - target_pkgs:
 
   `data.table` or `data.frame` from
-  [`manifest`](https://lennon-li.github.io/courieR/reference/manifest.md),
+  [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md),
   representing the installation you are copying packages *into*.
 
 ## Value

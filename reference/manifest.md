@@ -1,4 +1,4 @@
-# List packages installed in a library, optionally via a different R executable
+# List packages installed in a library
 
 Runs a subprocess under the given R executable and returns all
 user-installed packages. Base and recommended packages are excluded
@@ -21,7 +21,7 @@ manifest(
 
   Full path to an `Rscript` executable. Defaults to the current R
   session. Use
-  [`find_routes`](https://lennon-li.github.io/courieR/reference/find_routes.md)
+  [`find_routes()`](https://lennon-li.github.io/courieR/reference/find_routes.md)
   to get paths for other installations.
 
 - lib_path:
@@ -36,8 +36,8 @@ manifest(
 
 - timeout_sec:
 
-  Maximum seconds to wait for the subprocess. Increase on slow machines
-  or network-mounted drives. Default `30`.
+  Maximum seconds to wait for the subprocess. Increase this on slow
+  machines or network-mounted drives. Default `30`.
 
 ## Value
 

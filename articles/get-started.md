@@ -363,6 +363,11 @@ list.
   user-installed packages are compared and migrated
 - [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) uses
   `pak` under the hood, which resolves dependencies automatically
+- Use `mode = "offline"` when you have no internet access — courieR
+  copies package directories directly. Packages without a local source
+  path are reported as skipped
+- Use `mode = "preserve"` to keep exact version numbers; courieR copies
+  where possible and pins the version in the pak spec otherwise
 - The source R installation does not need any extra packages; only the
   target R needs `pak` installed, because installation runs under the
   target R process

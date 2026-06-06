@@ -52,6 +52,15 @@
 <div class="section level3">
 <h3 id="new-features-0-2-3">New features<a class="anchor" aria-label="anchor" href="#new-features-0-2-3"></a></h3>
 <ul><li>
+<code><a href="../reference/ship.html">ship()</a></code> and <code><a href="../reference/migrate.html">migrate()</a></code> gain a <code>mode</code> argument:
+<ul><li>
+<code>"online"</code> (default) — reinstall packages via pak from CRAN/GitHub/Bioconductor.</li>
+<li>
+<code>"offline"</code> — copy package directories by file; packages with no valid source path are skipped and reported.</li>
+<li>
+<code>"preserve"</code> — copy first to keep exact versions; fall back to a pinned pak spec (<code>pkg@version</code>) for packages that cannot be copied. The dashboard Sync tab exposes the same three options as a dropdown.</li>
+</ul></li>
+<li>
 <code>migrate(from, to)</code> — one-call CLI migration. Pass version strings (<code>"4.5.2"</code>, <code>"4.6.0"</code>) or full Rscript paths; courieR resolves the installations and runs <code><a href="../reference/ship.html">ship()</a></code> automatically.</li>
 <li>
 <code><a href="../reference/open_hub.html">hub()</a></code> — short alias for <code><a href="../reference/open_hub.html">open_hub()</a></code>. Run <code><a href="../reference/open_hub.html">hub()</a></code> to launch the dashboard with less typing.</li>

@@ -11,6 +11,8 @@ into a target R version using 'pak'. Includes a Shiny dashboard
 
 Useful links:
 
+- <https://lennon-li.github.io/courieR/>
+
 - <https://github.com/lennon-li/courieR>
 
 - Report bugs at <https://github.com/lennon-li/courieR/issues>

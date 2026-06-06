@@ -415,6 +415,12 @@ user-installed packages are compared and migrated</li>
 <li>
 <code><a href="../reference/ship.html">ship()</a></code> uses <code>pak</code> under the hood, which
 resolves dependencies automatically</li>
+<li>Use <code>mode = "offline"</code> when you have no internet access —
+courieR copies package directories directly. Packages without a local
+source path are reported as skipped</li>
+<li>Use <code>mode = "preserve"</code> to keep exact version numbers;
+courieR copies where possible and pins the version in the pak spec
+otherwise</li>
 <li>The source R installation does not need any extra packages; only the
 target R needs <code>pak</code> installed, because installation runs
 under the target R process</li>

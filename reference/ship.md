@@ -1,9 +1,7 @@
 # Ship packages between R installations
 
-Compares the package libraries of two R installations and installs
-missing or outdated packages into the target using
-[`pak::pkg_install()`](https://pak.r-lib.org/reference/pkg_install.html)
-running under the target R executable.
+Compares the package libraries of two R installations and transfers
+missing or outdated packages into the target.
 
 ## Usage
 
@@ -15,6 +13,7 @@ ship(
   dry_run = FALSE,
   upgrade = FALSE,
   log_callback = NULL,
+  mode = c("online", "offline", "preserve"),
   ...
 )
 ```
@@ -25,14 +24,14 @@ ship(
 
   Full path to the `Rscript` executable of the source installation (the
   one you are copying packages *from*). Use
-  [`find_routes`](https://lennon-li.github.io/courieR/reference/find_routes.md)
+  [`find_routes()`](https://lennon-li.github.io/courieR/reference/find_routes.md)
   to discover available paths.
 
 - target_path:
 
   Full path to the `Rscript` executable of the target installation (the
   one you are installing packages *into*). The target R must have `pak`
-  installed.
+  installed for `mode = "online"` or pak fallbacks.
 
 - packages:
 
@@ -55,8 +54,15 @@ ship(
 - log_callback:
 
   Optional function of one argument. When provided, it is called with a
-  single character string for each progress message emitted during the
-  pak subprocess. Useful for surfacing progress in a UI.
+  single character string for each progress message emitted during
+  package transfer.
+
+- mode:
+
+  Transfer mode: `"online"` reinstalls via pak (default), `"offline"`
+  copies package directories by file and skips packages without a valid
+  source path, and `"preserve"` copies first then falls back to a pinned
+  pak spec for packages that could not be copied.
 
 - ...:
 
@@ -69,18 +75,19 @@ A named list with the following elements:
 - `plan`:
 
   `data.table` of planned actions with columns `package`, `action`
-  (`"install"` or `"upgrade"`), `version.x` (source version),
-  `version.y` (target version, `NA` if missing), and `pak_spec`.
+  (`"install"` or `"upgrade"`), `mode`, `version.x` (source version),
+  `version.y` (target version, `NA` if the package is missing), and
+  `pak_spec` (the spec passed to pak).
 
 - `results`:
 
   `data.table` of per-package outcomes with columns `package`, `status`
-  (`"success"` or `"error"`), and `message`.
+  (`"success"`, `"skipped"`, or `"error"`), and `message`.
 
 - `comparison`:
 
   The raw
-  [`inventory`](https://lennon-li.github.io/courieR/reference/inventory.md)
+  [`inventory()`](https://lennon-li.github.io/courieR/reference/inventory.md)
   comparison table.
 
 - `dry_run`:
@@ -93,14 +100,13 @@ A named list with the following elements:
 
 ## Safety
 
-`ship()` installs packages into the target R library via
+`ship()` can install packages into the target R library via
 [`pak::pkg_install()`](https://pak.r-lib.org/reference/pkg_install.html)
-running in a subprocess. Set `dry_run = TRUE` to preview the migration
-plan without installing anything. When `dry_run = FALSE` (the default),
-pak runs under the target R executable so packages are installed for the
-destination R version. The source R need not have pak installed. All
-subprocess calls are confined to the target library path; no files are
-written outside the target library or the R temporary directory.
+running in a subprocess, or copy package directories directly for
+offline/preserve transfers. Set `dry_run = TRUE` to preview the
+migration plan without installing or copying anything. The source R need
+not have pak installed. Subprocess calls and file copies are confined to
+the target library path and R temporary directory.
 
 ## Examples
 
