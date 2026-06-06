@@ -4,6 +4,11 @@
 
 ### New features
 
+- `migrate(from, to)` — one-call CLI migration. Pass version strings
+  (`"4.5.2"`, `"4.6.0"`) or full Rscript paths; courieR resolves the
+  installations and runs
+  [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md)
+  automatically.
 - [`hub()`](https://lennon-li.github.io/courieR/reference/open_hub.md) —
   short alias for
   [`open_hub()`](https://lennon-li.github.io/courieR/reference/open_hub.md).

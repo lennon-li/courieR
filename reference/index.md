@@ -10,9 +10,14 @@ Launch the interactive Shiny dashboard.
 
 ## Core workflow
 
-The four functions that form the CLI pipeline: discover → scan → compare
-→ migrate.
+The CLI pipeline: discover → scan → compare → migrate. Use
+[`migrate()`](https://lennon-li.github.io/courieR/reference/migrate.md)
+for the one-call path or
+[`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) for
+full control.
 
+- [`migrate()`](https://lennon-li.github.io/courieR/reference/migrate.md)
+  : Migrate packages between two R installations in one call
 - [`find_routes()`](https://lennon-li.github.io/courieR/reference/find_routes.md)
   : Detect R installations on the system
 - [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md)

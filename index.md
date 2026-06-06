@@ -19,7 +19,9 @@ pak::pkg_install("lennon-li/courieR")
 ``` r
 
 library(courieR)
-hub()   # launches the Shiny dashboard
+hub()                          # point-and-click dashboard
+
+migrate("4.5.2", "4.6.0")     # one-line CLI migration
 ```
 
 The dashboard detects all R installations on your machine, displays them
@@ -51,10 +53,11 @@ of whether admin rights were used:
 | Function | What it does |
 |----|----|
 | [`hub()`](https://lennon-li.github.io/courieR/reference/open_hub.md) | Launch the Shiny dashboard |
+| `migrate(from, to)` | One-call CLI migration between two R versions |
 | [`find_routes()`](https://lennon-li.github.io/courieR/reference/find_routes.md) | Detect all R installations on the system |
 | [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md) | List packages installed in an R version |
 | [`inventory()`](https://lennon-li.github.io/courieR/reference/inventory.md) | Compare two package libraries |
-| [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) | Copy packages from one R to another (CLI) |
+| [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) | Full-control migration (custom paths, callbacks) |
 
 ## Dashboard — Sync Tab
 

@@ -86,7 +86,9 @@
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://lennon-li.github.io/courieR/">courieR</a></span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/open_hub.html">hub</a></span><span class="op">(</span><span class="op">)</span>   <span class="co"># launches the Shiny dashboard</span></span></code></pre></div>
+<span><span class="fu"><a href="reference/open_hub.html">hub</a></span><span class="op">(</span><span class="op">)</span>                          <span class="co"># point-and-click dashboard</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/migrate.html">migrate</a></span><span class="op">(</span><span class="st">"4.5.2"</span>, <span class="st">"4.6.0"</span><span class="op">)</span>     <span class="co"># one-line CLI migration</span></span></code></pre></div>
 <p>The dashboard detects all R installations on your machine, displays them in a header bar, and lets you compare and sync packages between any two.</p>
 </div>
 <div class="section level2">
@@ -140,6 +142,10 @@
 <td>Launch the Shiny dashboard</td>
 </tr>
 <tr>
+<td><code>migrate(from, to)</code></td>
+<td>One-call CLI migration between two R versions</td>
+</tr>
+<tr>
 <td><code><a href="reference/find_routes.html">find_routes()</a></code></td>
 <td>Detect all R installations on the system</td>
 </tr>
@@ -153,7 +159,7 @@
 </tr>
 <tr>
 <td><code><a href="reference/ship.html">ship()</a></code></td>
-<td>Copy packages from one R to another (CLI)</td>
+<td>Full-control migration (custom paths, callbacks)</td>
 </tr>
 </tbody>
 </table>
