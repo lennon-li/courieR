@@ -40,7 +40,24 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
   script_file <- tempfile(pattern = "courieR_manifest_", fileext = ".R")
   on.exit(if (fs::file_exists(script_file)) fs::file_delete(script_file), add = TRUE)
 
-  lib_arg <- if (is.null(lib_path)) "NULL" else deparse(lib_path)
+  # When lib_path is not explicit, fetch the target R's real .libPaths() using its
+  # normal startup (reads .Rprofile/.Renviron), so user-configured paths are included.
+  if (is.null(lib_path)) {
+    lp_res <- tryCatch(
+      processx::run(
+        rscript_path,
+        c("--no-save", "-e", "cat(paste(.libPaths(), collapse = '\n'))"),
+        error_on_status = FALSE,
+        timeout = 10
+      ),
+      error = function(e) NULL
+    )
+    if (!is.null(lp_res) && lp_res$status == 0 && nzchar(trimws(lp_res$stdout))) {
+      lib_path <- trimws(strsplit(trimws(lp_res$stdout), "\n")[[1]])
+    }
+  }
+
+  lib_arg <- if (is.null(lib_path)) "NULL" else paste(deparse(lib_path), collapse = "\n")
 
   script_content <- paste0('
 suppressPackageStartupMessages({
@@ -93,7 +110,7 @@ suppressPackageStartupMessages({
   res <- tryCatch(
     processx::run(
       command = rscript_path,
-      args = c("--vanilla", script_file),
+      args = c("--no-save", "--no-restore", "--no-site-file", "--no-init-file", script_file),
       timeout = timeout_sec,
       error_on_status = FALSE,
       windows_verbatim_args = FALSE
