@@ -55,7 +55,7 @@ included in the output.
   head(pkgs)
 #>    package version priority repository remotetype remoteusername remoterepo
 #>     <char>  <char>   <lgcl>     <lgcl>     <lgcl>         <lgcl>     <lgcl>
-#> 1:     pak   0.9.5       NA         NA         NA             NA         NA
+#> 1:     pak  0.10.0       NA         NA         NA             NA         NA
 #>                            libpath  source
 #>                             <char>  <char>
 #> 1: /opt/R/4.6.0/lib/R/site-library unknown
