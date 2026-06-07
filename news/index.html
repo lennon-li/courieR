@@ -11,7 +11,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">courieR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -47,6 +47,25 @@
       <small>Source: <a href="https://github.com/lennon-li/courieR/blob/master/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.0" id="courier-030">courieR 0.3.0<a class="anchor" aria-label="anchor" href="#courier-030"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-3-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-0"></a></h3>
+<ul><li>
+<code><a href="../reference/manifest.html">manifest()</a></code> no longer leaks the parent R session’s library/home environment into the target R subprocess. Previously <code>processx</code> inherited <code>R_LIBS_USER</code> (and <code>R_HOME</code>) from the R running courieR, so every probed installation reported the parent’s library — making distinct R versions appear to share one library and compare as 100% identical. The subprocess now strips <code>R_LIBS_USER</code>, <code>R_LIBS</code>, <code>R_LIBS_SITE</code>, and <code>R_HOME</code> while still reading the target R’s own <code>.Renviron</code>/<code>.Rprofile</code>.</li>
+<li>Dashboard: fixed “Operation not allowed without an active reactive context” on startup, caused by reading a <code>reactiveVal</code> outside a reactive consumer in the sync log helper (now wrapped in <code>isolate()</code>).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="dashboard-ux-0-3-0">Dashboard UX<a class="anchor" aria-label="anchor" href="#dashboard-ux-0-3-0"></a></h3>
+<ul><li>Renamed the core actions to match courieR’s shipping vocabulary: <strong>Scout</strong> (detect installations), <strong>Inventory</strong> (compare libraries), and <strong>Ship</strong> (transfer packages). The main tab is now <strong>Dispatch</strong>, and the Advanced tabs are <strong>Restock</strong>, <strong>Depot</strong>, <strong>Delivery Receipt</strong>, <strong>Route</strong>, and <strong>Manifest</strong>.</li>
+<li>Detection is no longer automatic on startup; click <strong>Scout</strong> to scan. A <code>Scout → Inventory → Ship</code> workflow note appears in the control panel, and the result is shared across tabs.</li>
+<li>The logo twinkles while the app is busy (tied to Shiny’s busy/idle events).</li>
+<li>Comparison table: per-column filters (search boxes for package/versions, a dropdown for status), pagination grouped compactly below the table, and the global search box removed. The log panel sits beside the comparison, spanning its full height.</li>
+<li>Transfer mode options shortened (Online reinstall / Offline copy / Preserve version) with a live description of the selected mode.</li>
+<li>
+<code><a href="../reference/find_routes.html">find_routes()</a></code> is called once per scan and shared across modules instead of being re-run by each, reducing startup/detection time.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.3" id="courier-023">courieR 0.2.3<a class="anchor" aria-label="anchor" href="#courier-023"></a></h2>
 <div class="section level3">

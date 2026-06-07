@@ -53,21 +53,11 @@ included in the output.
 # \donttest{
   pkgs <- manifest()
   head(pkgs)
-#>      package   version priority repository remotetype remoteusername remoterepo
-#>       <char>    <char>   <lgcl>     <char>     <char>         <lgcl>     <lgcl>
-#> 1:        DT    0.34.0       NA       RSPM   standard             NA         NA
-#> 2:        R6     2.6.1       NA       RSPM   standard             NA         NA
-#> 3:      Rcpp 1.1.1-1.1       NA       RSPM   standard             NA         NA
-#> 4:   askpass     1.2.1       NA       RSPM   standard             NA         NA
-#> 5: base64enc     0.1-6       NA       RSPM   standard             NA         NA
-#> 6:      brio     1.1.5       NA       RSPM   standard             NA         NA
+#>    package version priority repository remotetype remoteusername remoterepo
+#>     <char>  <char>   <lgcl>     <lgcl>     <lgcl>         <lgcl>     <lgcl>
+#> 1:     pak   0.9.5       NA         NA         NA             NA         NA
 #>                            libpath  source
 #>                             <char>  <char>
-#> 1: /home/runner/work/_temp/Library unknown
-#> 2: /home/runner/work/_temp/Library unknown
-#> 3: /home/runner/work/_temp/Library unknown
-#> 4: /home/runner/work/_temp/Library unknown
-#> 5: /home/runner/work/_temp/Library unknown
-#> 6: /home/runner/work/_temp/Library unknown
+#> 1: /opt/R/4.6.0/lib/R/site-library unknown
 # }
 ```
