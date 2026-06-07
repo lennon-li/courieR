@@ -3,16 +3,8 @@ mod_sync_ui <- function(id) {
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
-      tags$div(
-        class = "sync-workflow-note",
-        tags$span(class = "sync-workflow-step", "1 Scout"),
-        tags$span(class = "sync-workflow-arrow", "→"),
-        tags$span(class = "sync-workflow-step", "2 Inventory"),
-        tags$span(class = "sync-workflow-arrow", "→"),
-        tags$span(class = "sync-workflow-step", "3 Ship")
-      ),
-      actionButton(ns("detect"), "Scout", class = "btn sync-compare-btn",
-        onclick = "this.disabled = true;"),
+      uiOutput(ns("detecting_msg")),
+      uiOutput(ns("detected_installs")),
       hr(),
       div(
         class = "sync-select-block sync-select-block-a",
@@ -26,7 +18,7 @@ mod_sync_ui <- function(id) {
         selectInput(ns("install_b"), NULL, choices = character(0), selectize = FALSE),
         uiOutput(ns("install_b_badge"))
       ),
-      actionButton(ns("compare"), "Inventory", class = "btn sync-compare-btn",
+      actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn",
         onclick = "this.disabled = true;"),
       hr(),
       div(
@@ -50,6 +42,11 @@ mod_sync_ui <- function(id) {
       ),
       actionButton(ns("sync_btn"), "Ship", class = "btn sync-compare-btn"),
     ),
+    div(
+      id = "nav-progress-wrap",
+      style = "display:none;",
+      div(id = "nav-progress-bar")
+    ),
     bslib::card(
       class = "sync-card",
       bslib::card_header("Comparison"),
@@ -58,8 +55,6 @@ mod_sync_ui <- function(id) {
           class = "sync-workspace",
           div(
             class = "sync-comparison-pane",
-            uiOutput(ns("detecting_msg")),
-            uiOutput(ns("detected_installs")),
             uiOutput(ns("comparison_summary")),
             DT::dataTableOutput(ns("comparison_table"))
           ),
@@ -76,15 +71,16 @@ mod_sync_ui <- function(id) {
 mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, routes_cache = NULL, push_error = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    pending_sync    <- reactiveVal(NULL)
-    routes_data     <- reactiveVal(data.frame())
-    comparison_data <- reactiveVal(NULL)
-    detecting       <- reactiveVal(TRUE)
+    pending_sync     <- reactiveVal(NULL)
+    routes_data      <- reactiveVal(data.frame())
+    comparison_data  <- reactiveVal(NULL)
+    detecting        <- reactiveVal(TRUE)
     detection_status <- reactiveVal(NULL)
-    sync_log        <- reactiveVal(character())
-    sync_active     <- reactiveVal(FALSE)
-    sync_pct        <- reactiveVal(0)
-    sync_step       <- reactiveVal("Idle")
+    sync_log         <- reactiveVal(character())
+    sync_active      <- reactiveVal(FALSE)
+    sync_pct         <- reactiveVal(0)
+    sync_step        <- reactiveVal("Idle")
+    selected_statuses <- reactiveVal(NULL)
 
     r_label <- function(path, version) {
       loc <- if (grepl("AppData", path, ignore.case = TRUE)) {
@@ -132,9 +128,24 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       try({
         entry_json <- jsonlite::toJSON(entry, auto_unbox = TRUE)
         shinyjs::runjs(sprintf(
-          "(function(){var el=document.getElementById('%s'); if(!el) return; if(el.getAttribute('data-empty')==='true'){el.textContent=''; el.removeAttribute('data-empty');} var line=%s; el.textContent += (el.textContent ? '\\n' : '') + line; el.scrollTop = el.scrollHeight;})();",
+          "(function(){var el=document.getElementById('%s'); if(!el) return; if(el.getAttribute('data-empty')==='true'){el.innerHTML=''; el.removeAttribute('data-empty');} var raw=%s; var s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); el.innerHTML+=(el.innerHTML?'\\n':'')+s; el.scrollTop=el.scrollHeight;})();",
           ns("sync_log_pre"),
           entry_json
+        ))
+      }, silent = TRUE)
+      invisible(NULL)
+    }
+
+    add_sync_log_error <- function(...) {
+      msg <- paste(..., collapse = "")
+      display <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
+      sync_log(c(isolate(sync_log()), paste0("[ERR] ", display)))
+      try({
+        display_json <- jsonlite::toJSON(display, auto_unbox = TRUE)
+        shinyjs::runjs(sprintf(
+          "(function(){var el=document.getElementById('%s'); if(!el) return; if(el.getAttribute('data-empty')==='true'){el.innerHTML=''; el.removeAttribute('data-empty');} var raw=%s; var s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); el.innerHTML+=(el.innerHTML?'\\n':'')+'<span class=\"sync-log-error\">'+s+'</span>'; el.scrollTop=el.scrollHeight;})();",
+          ns("sync_log_pre"),
+          display_json
         ))
       }, silent = TRUE)
       invisible(NULL)
@@ -144,6 +155,27 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       sync_active(isTRUE(active))
       if (!is.null(pct)) sync_pct(max(0, min(100, as.numeric(pct))))
       if (!is.null(step)) sync_step(step)
+      pct_val  <- if (!is.null(pct)) max(0, min(100, as.numeric(pct))) else isolate(sync_pct())
+      step_val <- if (!is.null(step)) step else isolate(sync_step())
+      try({
+        step_json <- jsonlite::toJSON(step_val %||% "", auto_unbox = TRUE)
+        shinyjs::runjs(sprintf(
+          "(function(){
+            var w=document.getElementById('nav-progress-wrap');
+            var b=document.getElementById('nav-progress-bar');
+            if(!w||!b) return;
+            if(%s){
+              w.style.display='block';
+              b.style.width='%s%%';
+            } else {
+              b.style.width='100%%';
+              setTimeout(function(){ w.style.display='none'; b.style.width='0%%'; }, 350);
+            }
+          })()",
+          if (isTRUE(active)) "true" else "false",
+          pct_val
+        ))
+      }, silent = TRUE)
       invisible(NULL)
     }
 
@@ -201,12 +233,12 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       }
 
       for (i in seq_len(nrow(results))) {
-        add_sync_log(sprintf(
-          "  - %s: %s — %s",
-          results$package[[i]],
-          results$status[[i]],
-          results$message[[i]]
-        ))
+        line <- sprintf("  - %s: %s — %s", results$package[[i]], results$status[[i]], results$message[[i]])
+        if (identical(results$status[[i]], "error")) {
+          add_sync_log_error(line)
+        } else {
+          add_sync_log(line)
+        }
       }
 
       invisible(NULL)
@@ -323,12 +355,9 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
         return("less than 1 minute")
       }
 
-      min_minutes <- ceiling(max(1, package_count * 0.25))
-      max_minutes <- ceiling(max(min_minutes + 1, package_count * 1.5))
-
-      if (package_count >= 20) {
-        max_minutes <- ceiling(max_minutes * 1.25)
-      }
+      # ~8-25 seconds per package via pak (network + compile)
+      min_minutes <- ceiling(max(1, package_count * 8 / 60))
+      max_minutes <- ceiling(max(min_minutes + 1, package_count * 25 / 60))
 
       sprintf("%d-%d minutes", min_minutes, max_minutes)
     }
@@ -438,20 +467,13 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
     output$detecting_msg <- renderUI({
       if (detecting()) {
         return(div(
-          class = "alert alert-info sync-detecting-msg",
+          class = "sync-detecting-sidebar",
           role = "status",
-          tags$span(class = "sync-detecting-spinner", ""),
-          "Scanning for R installations..."
+          tags$div(class = "sync-detecting-pulse"),
+          tags$div(class = "sync-detecting-text", "Scanning for R installations…")
         ))
       }
-
-      status <- detection_status()
-      if (is.null(status) || !nzchar(status)) return(NULL)
-      div(
-        class = "alert alert-info sync-detecting-msg",
-        role = "status",
-        status
-      )
+      NULL
     })
 
     route_location <- function(path) {
@@ -475,20 +497,20 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       sel_b <- input$install_b
 
       tags$div(
-        class = "top-install-summary",
+        class = "sidebar-installs",
+        tags$div(class = "sidebar-installs-label", "Installations found:"),
         lapply(seq_len(nrow(routes)), function(i) {
           path <- routes$rscript_path[[i]]
-          extra <- if (!is.null(sel_a) && identical(path, sel_a)) {
-            "top-install-pill-a"
-          } else if (!is.null(sel_b) && identical(path, sel_b)) {
-            "top-install-pill-b"
-          } else {
-            ""
-          }
+          bucket <- if (!is.null(sel_a) && identical(path, sel_a)) "a"
+                    else if (!is.null(sel_b) && identical(path, sel_b)) "b"
+                    else ""
+          extra_cls <- if (nzchar(bucket)) paste0("sidebar-install-", bucket) else ""
           tags$div(
-            class = paste("top-install-pill", extra),
-            tags$span(class = "top-install-pill-version", sprintf("R %s", routes$version[[i]])),
-            tags$span(class = "top-install-pill-location", route_location(path))
+            class = paste("sidebar-install-row", extra_cls),
+            tags$span(class = "sidebar-install-version",
+              sprintf("R %s", routes$version[[i]])),
+            tags$span(class = "sidebar-install-loc",
+              route_location(path))
           )
         })
       )
@@ -501,11 +523,15 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       b_version <- route_version(input$install_b)
 
       counts <- table(comp[["status"]])
+      filter_state <- selected_statuses()
       make_chip <- function(status, label, css_extra = "") {
         n <- as.integer(counts[status])
         if (is.na(n) || n == 0) return(NULL)
+        is_active <- is.null(filter_state) || status %in% filter_state
         tags$span(
-          class = paste("sync-summary-chip", css_extra),
+          class = paste("sync-summary-chip", if (is_active) "chip-active" else "", css_extra),
+          `data-status` = status,
+          onclick = sprintf("courierChipClick(this, '%s', '%s')", status, ns("filter_statuses")),
           tags$strong(n), " × ", label
         )
       }
@@ -524,6 +550,15 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
         make_chip("missing-from-A", na_lbl,      "chip-diff-b")
       )
     })
+
+    format_log_entry <- function(entry) {
+      if (startsWith(entry, "[ERR] ")) {
+        clean <- htmltools::htmlEscape(substr(entry, 7L, nchar(entry)))
+        sprintf('<span class="sync-log-error">%s</span>', clean)
+      } else {
+        htmltools::htmlEscape(entry)
+      }
+    }
 
     output$sync_log <- renderUI({
       entries <- sync_log()
@@ -552,7 +587,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
         NULL
       }
 
-      empty_text <- "Click Scout to find installations, then Inventory. Activity appears here."
+      empty_text <- "Scanning installations… then click Compare. Activity appears here."
       tags$div(
         class = paste("sync-log", if (length(entries) == 0) "sync-log-empty" else ""),
         tags$div(
@@ -567,7 +602,14 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
         tags$pre(
           id = ns("sync_log_pre"),
           `data-empty` = if (length(entries) == 0) "true" else NULL,
-          if (length(entries) == 0) empty_text else paste(utils::tail(entries, 250), collapse = "\n")
+          if (length(entries) == 0) {
+            empty_text
+          } else {
+            HTML(paste(
+              vapply(utils::tail(entries, 250), format_log_entry, character(1)),
+              collapse = "\n"
+            ))
+          }
         )
       )
     })
@@ -639,17 +681,13 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       tags$div(class = "sync-mode-desc", mode_description(input$transfer_mode))
     })
 
-    observeEvent(input$detect, {
-      sync_log(character())
+    # Auto-scan on startup — no manual trigger needed.
+    observeEvent(TRUE, {
       set_sync_progress(0, "Detecting R installations", active = TRUE)
-      withProgress(message = "Detecting R installations…", value = 0, {
-        load_routes()
-      })
-      # Share detected routes with the other tabs (Advanced > Packages, etc.).
+      load_routes()
       if (is.function(routes_cache)) routes_cache(isolate(routes_data()))
       set_sync_progress(100, "Detection complete", active = FALSE)
-      re_enable_btn("detect")
-    })
+    }, once = TRUE, ignoreNULL = FALSE)
 
     observeEvent(input$compare, {
       a_path <- input$install_a
@@ -668,13 +706,17 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       }
 
       sync_log(character())
+      selected_statuses(NULL)
       add_sync_log("Starting comparison…")
       set_sync_progress(0, "Comparing installations", active = TRUE)
 
       tryCatch({
-        withProgress(message = "Comparing R installations…", value = 0, {
-          refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
-        })
+        refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
+        comp <- comparison_data()
+        diff_statuses <- c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+        if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
+          selected_statuses(diff_statuses)
+        }
         set_sync_progress(100, "Comparison ready", active = FALSE)
       }, error = function(e) {
         set_sync_progress(0, "Comparison failed", active = FALSE)
@@ -686,8 +728,20 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       re_enable_compare()
     })
 
+    observeEvent(input$filter_statuses, {
+      vals <- input$filter_statuses
+      if (is.null(vals) || length(vals) == 0) {
+        selected_statuses(NULL)
+      } else {
+        selected_statuses(vals)
+      }
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
     sync_comparison <- reactive({
-      comparison_data()
+      comp <- comparison_data()
+      filter <- selected_statuses()
+      if (is.null(filter) || is.null(comp)) return(comp)
+      comp[comp[["status"]] %in% filter, ]
     })
 
     output$comparison_table <- DT::renderDataTable({
@@ -702,7 +756,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
           ),
           filter = "top",
           options = list(dom = "ft"),
-          caption = htmltools::tags$caption("Select two installations and click Inventory.")
+          caption = htmltools::tags$caption("Select two installations and click Compare.")
         ))
       }
 
@@ -778,29 +832,30 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
 
       if (plan$type == "full") {
         package_count <- length(plan$packages_a_to_b) + length(plan$packages_b_to_a)
-        msg <- sprintf(
-          "This will install or upgrade %d package(s) into B and %d package(s) into A. Estimated time: %s. Proceed?",
-          length(plan$packages_a_to_b),
-          length(plan$packages_b_to_a),
-          estimate_sync_time(package_count)
-        )
       } else {
         package_count <- length(plan$packages)
-        msg <- sprintf(
-          "This will install or upgrade %d package(s). Estimated time: %s. Proceed?",
-          length(plan$packages),
-          estimate_sync_time(package_count)
-        )
       }
 
       showModal(modalDialog(
-        title = "Confirm Ship",
-        tags$p(msg),
-        tags$p(tags$strong("Transfer mode: "), mode_note),
+        title = span(style = "font-weight:800; color:#2c1e6e;", "Confirm Ship"),
+        div(
+          style = "padding: 0.25rem 0;",
+          div(
+            class = "modal-ship-pkg-count",
+            if (plan$type == "full") {
+              sprintf("%d + %d packages", length(plan$packages_a_to_b), length(plan$packages_b_to_a))
+            } else {
+              sprintf("%d package%s", package_count, if (package_count == 1) "" else "s")
+            }
+          ),
+          div(class = "modal-ship-time", estimate_sync_time(package_count), " estimated"),
+          div(class = "modal-ship-mode", tags$strong("Mode: "), mode_note)
+        ),
         easyClose = TRUE,
         footer = tagList(
           modalButton("Cancel"),
-          actionButton(ns("confirm_sync"), "Proceed", class = "btn-primary")
+          actionButton(ns("confirm_sync"), "Ship", class = "btn-primary",
+            style = "background: linear-gradient(90deg,#5f4ab4 0%,#8a52c8 100%); border:0; font-weight:800;")
         )
       ))
     }
@@ -808,7 +863,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
     observeEvent(input$sync_btn, {
       comp <- sync_comparison()
       if (is.null(comp)) {
-        showNotification("Run Inventory first.", type = "warning")
+        showNotification("Run Compare first.", type = "warning")
         return()
       }
 

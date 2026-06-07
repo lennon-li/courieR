@@ -115,7 +115,53 @@ mod_origin_server <- function(id, from_r_path = NULL, routes_cache = NULL, push_
       req(pkg_data())
       pkgs <- pkg_data()
       pkgs <- pkgs[is.na(pkgs$priority) | !(pkgs$priority %in% c("base", "recommended")), ]
-      DT::datatable(pkgs, options = list(pageLength = 15, dom = "frtip"), rownames = FALSE)
+
+      # Build a human-readable source label
+      src_label <- vapply(seq_len(nrow(pkgs)), function(i) {
+        s  <- pkgs$source[[i]]
+        rt <- if ("remotetype"     %in% names(pkgs)) pkgs$remotetype[[i]]     else NA_character_
+        ru <- if ("remoteusername" %in% names(pkgs)) pkgs$remoteusername[[i]] else NA_character_
+        rr <- if ("remoterepo"     %in% names(pkgs)) pkgs$remoterepo[[i]]     else NA_character_
+        if (identical(s, "GitHub") && !is.na(ru) && !is.na(rr) && nzchar(ru) && nzchar(rr)) {
+          paste0("GitHub  ", ru, "/", rr)
+        } else if (identical(s, "GitHub") && !is.na(ru) && nzchar(ru)) {
+          paste0("GitHub  ", ru)
+        } else if (!is.null(s) && !is.na(s) && nzchar(s)) {
+          s
+        } else if (!is.na(rt) && nzchar(rt)) {
+          rt
+        } else {
+          "unknown"
+        }
+      }, character(1))
+
+      display <- data.frame(
+        Package = pkgs$package,
+        Version = pkgs$version,
+        Source  = src_label,
+        Library = if ("libpath" %in% names(pkgs)) pkgs$libpath else NA_character_,
+        stringsAsFactors = FALSE
+      )
+
+      DT::datatable(
+        display,
+        rownames = FALSE,
+        options = list(pageLength = 15, dom = "frtip", autoWidth = FALSE)
+      ) |>
+        DT::formatStyle(
+          "Source",
+          backgroundColor = DT::styleEqual(
+            c("CRAN", "Bioconductor"),
+            c("rgba(237,244,250,0.7)", "rgba(232,249,250,0.7)")
+          ),
+          color = DT::styleEqual(
+            c("CRAN", "Bioconductor", "unknown"),
+            c("#355066",              "#15606a",       "#9aabba")
+          ),
+          fontWeight = DT::styleEqual(
+            c("CRAN"), c("400")
+          )
+        )
     })
 
     observeEvent(routes_rv(), {

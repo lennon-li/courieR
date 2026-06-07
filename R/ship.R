@@ -109,8 +109,8 @@ find_target_lib <- function(target_path) {
       target_path,
       c("--vanilla", install_script_file, install_args_file),
       error_on_status = FALSE,
-      stdout_line_callback = function(line) emit_log(line),
-      stderr_line_callback = function(line) emit_log(line)
+      stdout_line_callback = function(line, proc) emit_log(line),
+      stderr_line_callback = function(line, proc) emit_log(line)
     )
     if (res$status == 0) {
       emit_log("pak subprocess finished successfully.")
