@@ -4,22 +4,22 @@ mod_update_ui <- function(id) {
     width = 1/2,
     bslib::card(
       class = "advanced-pane advanced-update-card advanced-update-card-a",
-      bslib::card_header("Update Installation A"),
+      bslib::card_header("Restock Installation A"),
       bslib::card_body(
         uiOutput(ns("badge_a")),
         div(class = "update-btn-wrap",
-          actionButton(ns("update_a"), "Update A to Latest CRAN",
+          actionButton(ns("update_a"), "Restock A from CRAN",
                        class = "btn update-btn update-btn-a")
         )
       )
     ),
     bslib::card(
       class = "advanced-pane advanced-update-card advanced-update-card-b",
-      bslib::card_header("Update Installation B"),
+      bslib::card_header("Restock Installation B"),
       bslib::card_body(
         uiOutput(ns("badge_b")),
         div(class = "update-btn-wrap",
-          actionButton(ns("update_b"), "Update B to Latest CRAN",
+          actionButton(ns("update_b"), "Restock B from CRAN",
                        class = "btn update-btn update-btn-b")
         )
       )
@@ -35,7 +35,7 @@ mod_update_server <- function(id, install_a_path, install_b_path, push_error = N
     path_badge <- function(path, bucket) {
       if (is.null(path) || !nzchar(path)) {
         return(tags$p(class = "update-no-selection",
-                      "Select an installation in the Sync tab first."))
+                      "Select an installation in the Dispatch tab first."))
       }
       tags$div(
         class = paste0("update-path-badge update-path-badge-", bucket),
@@ -48,7 +48,7 @@ mod_update_server <- function(id, install_a_path, install_b_path, push_error = N
 
     do_click <- function(path, label) {
       if (is.null(path) || !nzchar(path)) {
-        showNotification("Select an installation in the Sync tab first.", type = "warning")
+        showNotification("Select an installation in the Dispatch tab first.", type = "warning")
         return()
       }
 
@@ -101,7 +101,7 @@ mod_update_server <- function(id, install_a_path, install_b_path, push_error = N
       } else NULL
 
       showModal(modalDialog(
-        title = paste0("Update Installation ", label, " to Latest CRAN"),
+        title = paste0("Restock Installation ", label, " from CRAN"),
         if (length(cran_pkgs) > 0) {
           tags$p(sprintf(
             "%d CRAN package(s) will be upgraded to their latest versions.",
@@ -144,7 +144,7 @@ mod_update_server <- function(id, install_a_path, install_b_path, push_error = N
       specs <- plan$cran_pkgs
       ok <- tryCatch({
         withProgress(
-          message = sprintf("Updating %d package(s) in installation %s…",
+          message = sprintf("Restocking %d package(s) in installation %s…",
                             length(specs), plan$label),
           value = 0, {
             callr::r(
@@ -158,15 +158,15 @@ mod_update_server <- function(id, install_a_path, install_b_path, push_error = N
         )
         TRUE
       }, error = function(e) {
-        showNotification(paste("Update failed:", e$message), type = "error", duration = NULL)
-        if (is.function(push_error)) push_error(e$message, context = "Updating packages")
+        showNotification(paste("Restock failed:", e$message), type = "error", duration = NULL)
+        if (is.function(push_error)) push_error(e$message, context = "Restocking packages")
         FALSE
       })
 
       pending(NULL)
       if (ok) {
         showNotification(
-          sprintf("Updated %d package(s) in installation %s.", length(specs), plan$label),
+          sprintf("Restocked %d package(s) in installation %s.", length(specs), plan$label),
           type = "message"
         )
       }

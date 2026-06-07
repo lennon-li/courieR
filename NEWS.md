@@ -1,3 +1,38 @@
+# courieR 0.3.0
+
+## Bug fixes
+
+* `manifest()` no longer leaks the parent R session's library/home environment
+  into the target R subprocess. Previously `processx` inherited `R_LIBS_USER`
+  (and `R_HOME`) from the R running courieR, so every probed installation
+  reported the parent's library — making distinct R versions appear to share one
+  library and compare as 100% identical. The subprocess now strips
+  `R_LIBS_USER`, `R_LIBS`, `R_LIBS_SITE`, and `R_HOME` while still reading the
+  target R's own `.Renviron`/`.Rprofile`.
+* Dashboard: fixed "Operation not allowed without an active reactive context"
+  on startup, caused by reading a `reactiveVal` outside a reactive consumer in
+  the sync log helper (now wrapped in `isolate()`).
+
+## Dashboard UX
+
+* Renamed the core actions to match courieR's shipping vocabulary:
+  **Scout** (detect installations), **Inventory** (compare libraries), and
+  **Ship** (transfer packages). The main tab is now **Dispatch**, and the
+  Advanced tabs are **Restock**, **Depot**, **Delivery Receipt**, **Route**,
+  and **Manifest**.
+* Detection is no longer automatic on startup; click **Scout** to scan. A
+  `Scout → Inventory → Ship` workflow note appears in the control panel, and the
+  result is shared across tabs.
+* The logo twinkles while the app is busy (tied to Shiny's busy/idle events).
+* Comparison table: per-column filters (search boxes for package/versions, a
+  dropdown for status), pagination grouped compactly below the table, and the
+  global search box removed. The log panel sits beside the comparison, spanning
+  its full height.
+* Transfer mode options shortened (Online reinstall / Offline copy / Preserve
+  version) with a live description of the selected mode.
+* `find_routes()` is called once per scan and shared across modules instead of
+  being re-run by each, reducing startup/detection time.
+
 # courieR 0.2.3
 
 ## New features

@@ -20,25 +20,51 @@ body {
 .navbar > .container {
   display: flex;
   align-items: flex-end;
+  position: relative;
   width: 100%;
+  min-height: 92px;
   gap: 1rem;
   padding-bottom: 0;
+}
+
+.navbar .navbar-brand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 0;
 }
 
 .app-brand {
   display: flex;
   align-items: center;
-  min-height: 84px;
+  justify-content: center;
   gap: 1rem;
-  flex: 1 1 auto;
   min-width: 0;
-  align-self: center;
-  padding-bottom: 4px;
 }
 
 .app-brand img {
   display: block;
   background: transparent;
+}
+
+/* Logo twinkles whenever Shiny is busy (after Detect/Compare/Sync etc.). */
+.app-brand-mark.app-busy img {
+  animation: logo-twinkle 1.1s ease-in-out infinite;
+}
+
+@keyframes logo-twinkle {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(95, 74, 180, 0));
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 8px rgba(95, 74, 180, 0.65));
+    opacity: 0.78;
+  }
 }
 
 .app-brand-mark {
@@ -61,21 +87,21 @@ body {
 .top-install-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-left: 0.4rem;
-  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
 }
 
 .top-install-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
+  gap: 0.3rem;
   border-radius: 999px;
-  padding: 0.22rem 0.62rem;
+  padding: 0.12rem 0.5rem;
   background: #ffffff;
   border: 1px solid #d6e4ef;
   color: #355066;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
@@ -281,6 +307,40 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
+.sync-mode-desc {
+  margin-top: 0.4rem;
+  color: #6d879b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sync-workflow-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.45rem;
+  margin-bottom: 0.7rem;
+  padding: 0.4rem 0.5rem;
+  background: #f1f4f8;
+  border: 1px solid #dde6ee;
+  border-radius: 10px;
+}
+
+.sync-workflow-step {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #355066;
+  text-transform: uppercase;
+}
+
+.sync-workflow-arrow {
+  color: #9aabba;
+  font-weight: 800;
+}
+
 .sync-compare-btn {
   margin-top: 0.35rem;
   margin-bottom: 0.45rem;
@@ -466,8 +526,8 @@ body {
 
 .sync-workspace {
   display: grid;
-  grid-template-columns: minmax(560px, 1.15fr) minmax(420px, 0.85fr);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.85fr);
+  align-items: start;
   gap: 1rem;
   width: 100%;
 }
@@ -480,10 +540,9 @@ body {
 .sync-log-pane {
   position: sticky;
   top: 0.75rem;
-  align-self: start;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1100px) {
   .sync-workspace {
     grid-template-columns: 1fr;
   }
@@ -560,17 +619,63 @@ body {
   color: #355066;
 }
 
+#sync-comparison_table_wrapper,
+.sync-comparison-pane .dataTables_wrapper,
+.sync-comparison-pane table.dataTable {
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+/* Group the length selector, info text, and pagination compactly below the
+   table instead of letting DataTables spread them across half-width columns. */
+.sync-table-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin-top: 0.6rem;
+}
+
+.sync-table-foot .dataTables_length,
+.sync-table-foot .dataTables_info,
+.sync-table-foot .dataTables_paginate {
+  margin: 0 !important;
+  float: none !important;
+  width: auto !important;
+  text-align: left !important;
+}
+
+.sync-table-foot .dataTables_paginate {
+  margin-left: auto !important;
+}
+
+/* Greyed-out look for sync controls disabled when nothing needs transferring. */
+.sync-select-block select.form-control:disabled {
+  background: #eef1f4;
+  color: #9aa7b2;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.sync-compare-btn:disabled,
+.sync-compare-btn[disabled] {
+  background: #c4cdd6;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
 .sync-detecting-msg {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.7rem 1rem;
-  margin-bottom: 0.75rem;
+  padding: 0.45rem 0.8rem;
+  margin-bottom: 0.5rem;
   background: #eef6ff;
   border: 1px solid #c3ddf5;
-  border-radius: 12px;
+  border-radius: 10px;
   color: #1d6fa5;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 

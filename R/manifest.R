@@ -40,6 +40,18 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
   script_file <- tempfile(pattern = "courieR_manifest_", fileext = ".R")
   on.exit(if (fs::file_exists(script_file)) fs::file_delete(script_file), add = TRUE)
 
+  # Strip the *parent* R session's library/home env vars before launching the
+  # target R. Otherwise processx inherits R_LIBS_USER / R_HOME from the R that
+  # is running courieR, and the target R reports the parent's library instead of
+  # its own — making every installation appear to share one library. The target
+  # R still reads its own .Renviron/.Rprofile, so user-configured paths survive.
+  child_env <- (function() {
+    cur  <- Sys.getenv()
+    nm   <- names(cur)
+    keep <- !(nm %in% c("R_LIBS_USER", "R_LIBS", "R_LIBS_SITE", "R_HOME"))
+    c(stats::setNames(as.character(cur)[keep], nm[keep]), R_HOME = "")
+  })()
+
   # When lib_path is not explicit, fetch the target R's real .libPaths() using its
   # normal startup (reads .Rprofile/.Renviron), so user-configured paths are included.
   if (is.null(lib_path)) {
@@ -47,6 +59,7 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
       processx::run(
         rscript_path,
         c("--no-save", "-e", "cat(paste(.libPaths(), collapse = '\n'))"),
+        env = child_env,
         error_on_status = FALSE,
         timeout = 10
       ),
@@ -111,6 +124,7 @@ suppressPackageStartupMessages({
     processx::run(
       command = rscript_path,
       args = c("--no-save", "--no-restore", "--no-site-file", "--no-init-file", script_file),
+      env = child_env,
       timeout = timeout_sec,
       error_on_status = FALSE,
       windows_verbatim_args = FALSE

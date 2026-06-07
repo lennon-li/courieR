@@ -3,6 +3,17 @@ mod_sync_ui <- function(id) {
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
+      tags$div(
+        class = "sync-workflow-note",
+        tags$span(class = "sync-workflow-step", "1 Scout"),
+        tags$span(class = "sync-workflow-arrow", "→"),
+        tags$span(class = "sync-workflow-step", "2 Inventory"),
+        tags$span(class = "sync-workflow-arrow", "→"),
+        tags$span(class = "sync-workflow-step", "3 Ship")
+      ),
+      actionButton(ns("detect"), "Scout", class = "btn sync-compare-btn",
+        onclick = "this.disabled = true;"),
+      hr(),
       div(
         class = "sync-select-block sync-select-block-a",
         tags$div(class = "sync-select-label", "Select first installation"),
@@ -15,40 +26,41 @@ mod_sync_ui <- function(id) {
         selectInput(ns("install_b"), NULL, choices = character(0), selectize = FALSE),
         uiOutput(ns("install_b_badge"))
       ),
-      actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn"),
+      actionButton(ns("compare"), "Inventory", class = "btn sync-compare-btn",
+        onclick = "this.disabled = true;"),
       hr(),
-      selectInput(
-        ns("transfer_mode"),
-        label = "Transfer mode",
-        choices = c(
-          "Online — reinstall via pak" = "online",
-          "Offline — copy files, skip the rest" = "offline",
-          "Preserve versions — copy then pin" = "preserve"
-        ),
-        selected = "online"
+      div(
+        class = "sync-select-block",
+        tags$div(class = "sync-select-label", "Transfer mode"),
+        selectInput(ns("transfer_mode"), NULL, width = "100%", selectize = FALSE, choices = c(
+          "Online reinstall" = "online",
+          "Offline copy" = "offline",
+          "Preserve version" = "preserve"
+        ), selected = "online"),
+        uiOutput(ns("transfer_mode_desc"))
       ),
-      selectInput(
-        ns("sync_direction"),
-        label = "Sync direction",
-        choices = c(
+      div(
+        class = "sync-select-block",
+        tags$div(class = "sync-select-label", "Sync direction"),
+        selectInput(ns("sync_direction"), NULL, width = "100%", selectize = FALSE, choices = c(
           "A → B" = "A_to_B",
           "B → A" = "B_to_A",
-          "Two-way"    = "full"
-        ),
-        selected = "A_to_B"
+          "Two-way" = "full"
+        ), selected = "A_to_B")
       ),
-      actionButton(ns("sync_btn"), "Sync", class = "btn sync-compare-btn"),
+      actionButton(ns("sync_btn"), "Ship", class = "btn sync-compare-btn"),
     ),
     bslib::card(
       class = "sync-card",
       bslib::card_header("Comparison"),
       bslib::card_body(
-        uiOutput(ns("detecting_msg")),
-        uiOutput(ns("comparison_summary")),
         div(
           class = "sync-workspace",
           div(
             class = "sync-comparison-pane",
+            uiOutput(ns("detecting_msg")),
+            uiOutput(ns("detected_installs")),
+            uiOutput(ns("comparison_summary")),
             DT::dataTableOutput(ns("comparison_table"))
           ),
           div(
@@ -61,7 +73,7 @@ mod_sync_ui <- function(id) {
   )
 }
 
-mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, push_error = NULL) {
+mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, routes_cache = NULL, push_error = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending_sync    <- reactiveVal(NULL)
@@ -116,7 +128,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
     add_sync_log <- function(...) {
       msg <- paste(..., collapse = "")
       entry <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
-      sync_log(c(sync_log(), entry))
+      sync_log(c(isolate(sync_log()), entry))
       try({
         entry_json <- jsonlite::toJSON(entry, auto_unbox = TRUE)
         shinyjs::runjs(sprintf(
@@ -321,16 +333,73 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       sprintf("%d-%d minutes", min_minutes, max_minutes)
     }
 
+    log_libpaths <- function(label, pkgs) {
+      if (is.null(pkgs) || !"libpath" %in% names(pkgs) || nrow(pkgs) == 0) {
+        add_sync_log(label, ": no packages found.")
+        return(invisible(NULL))
+      }
+      libs <- unique(pkgs$libpath)
+      add_sync_log(sprintf("%s: %d package(s) across %d librar%s:",
+                           label, nrow(pkgs), length(libs),
+                           if (length(libs) == 1) "y" else "ies"))
+      for (lib in libs) add_sync_log("    ", lib)
+      invisible(NULL)
+    }
+
     refresh_comparison <- function(a_path, b_path, progress_detail = "Refreshing comparison", pct_base = 0, pct_span = 100) {
       set_sync_progress(pct_base, progress_detail, active = TRUE)
       add_sync_log(progress_detail, ".")
+      add_sync_log("Installation A: ", route_display(a_path))
+      add_sync_log("Installation B: ", route_display(b_path))
       set_sync_progress(pct_base + pct_span * 0.2, "Scanning first installation", active = TRUE)
       a_pkgs <- courieR::manifest(rscript_path = a_path)
+      log_libpaths("Installation A library", a_pkgs)
       set_sync_progress(pct_base + pct_span * 0.55, "Scanning second installation", active = TRUE)
       b_pkgs <- courieR::manifest(rscript_path = b_path)
+      log_libpaths("Installation B library", b_pkgs)
+      if (identical(sort(unique(a_pkgs$libpath)), sort(unique(b_pkgs$libpath)))) {
+        add_sync_log("WARNING: both installations resolve to the SAME library path. ",
+                     "They share a package library (likely via R_LIBS_USER in .Renviron), ",
+                     "so every package will compare as identical.")
+      }
       set_sync_progress(pct_base + pct_span * 0.8, "Building comparison", active = TRUE)
       comparison_data(build_sync_comparison(a_pkgs, b_pkgs))
       set_sync_progress(pct_base + pct_span, "Comparison ready", active = TRUE)
+    }
+
+    apply_routes <- function(r) {
+      routes_data(r)
+      detection_status(sprintf("Detection complete: found %d installation(s).", nrow(r)))
+      add_sync_log(sprintf("Detection complete: found %d installation(s).", nrow(r)))
+      if (nrow(r) == 0) {
+        showNotification("No R installations detected.", type = "warning")
+        updateSelectInput(session, "install_a", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
+      } else {
+        labels <- mapply(r_label, r$rscript_path, r$version)
+        choices <- stats::setNames(r$rscript_path, labels)
+
+        current_a <- isolate(input$install_a)
+        current_b <- isolate(input$install_b)
+
+        selected_a <- if (!is.null(current_a) && nzchar(current_a) && current_a %in% r$rscript_path) {
+          current_a
+        } else {
+          r$rscript_path[[1]]
+        }
+
+        selected_b <- if (!is.null(current_b) && nzchar(current_b) && current_b %in% r$rscript_path && !identical(current_b, selected_a)) {
+          current_b
+        } else if (nrow(r) >= 2) {
+          r$rscript_path[[2]]
+        } else {
+          r$rscript_path[[1]]
+        }
+
+        updateSelectInput(session, "install_a", choices = choices, selected = selected_a)
+        updateSelectInput(session, "install_b", choices = choices, selected = selected_b)
+      }
+      detecting(FALSE)
     }
 
     load_routes <- function() {
@@ -339,44 +408,14 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       add_sync_log("Scanning for R installations...")
       tryCatch({
         r <- sort_routes(courieR::find_routes())
-        routes_data(r)
-        detection_status(sprintf("Detection complete: found %d installation(s).", nrow(r)))
-        add_sync_log(sprintf("Detection complete: found %d installation(s).", nrow(r)))
-        if (nrow(r) == 0) {
-          showNotification("No R installations detected.", type = "warning")
-          updateSelectInput(session, "install_a", choices = character(0), selected = character(0))
-          updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
-        } else {
-          labels <- mapply(r_label, r$rscript_path, r$version)
-          choices <- stats::setNames(r$rscript_path, labels)
-
-          current_a <- isolate(input$install_a)
-          current_b <- isolate(input$install_b)
-
-          selected_a <- if (!is.null(current_a) && nzchar(current_a) && current_a %in% r$rscript_path) {
-            current_a
-          } else {
-            r$rscript_path[[1]]
-          }
-
-          selected_b <- if (!is.null(current_b) && nzchar(current_b) && current_b %in% r$rscript_path && !identical(current_b, selected_a)) {
-            current_b
-          } else if (nrow(r) >= 2) {
-            r$rscript_path[[2]]
-          } else {
-            r$rscript_path[[1]]
-          }
-
-          updateSelectInput(session, "install_a", choices = choices, selected = selected_a)
-          updateSelectInput(session, "install_b", choices = choices, selected = selected_b)
-        }
+        apply_routes(r)
       }, error = function(e) {
         detection_status("Detection failed. See error details below.")
         add_sync_log("Detection failed: ", e$message)
         showNotification(paste("Route scan failed:", e$message), type = "error")
         if (is.function(push_error)) push_error(e$message, context = "Detecting R installations")
+        detecting(FALSE)
       })
-      detecting(FALSE)
     }
 
 
@@ -412,6 +451,46 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         class = "alert alert-info sync-detecting-msg",
         role = "status",
         status
+      )
+    })
+
+    route_location <- function(path) {
+      if (grepl("AppData", path, ignore.case = TRUE)) return("AppData")
+      if (grepl("Program Files", path, ignore.case = TRUE)) return("Program Files")
+      if (grepl("Documents", path, ignore.case = TRUE)) return("Documents")
+      if (grepl("homebrew|Cellar", path, ignore.case = TRUE)) return("Homebrew")
+      if (grepl("/opt/R/", path)) return("rig")
+      if (grepl("\\.local/share/rig", path)) return("rig (user)")
+      if (grepl("conda", path, ignore.case = TRUE)) return("conda")
+      if (grepl("Library/Frameworks", path)) return("Framework")
+      basename(dirname(dirname(path)))
+    }
+
+    output$detected_installs <- renderUI({
+      if (detecting()) return(NULL)
+      routes <- routes_data()
+      if (nrow(routes) == 0) return(NULL)
+
+      sel_a <- input$install_a
+      sel_b <- input$install_b
+
+      tags$div(
+        class = "top-install-summary",
+        lapply(seq_len(nrow(routes)), function(i) {
+          path <- routes$rscript_path[[i]]
+          extra <- if (!is.null(sel_a) && identical(path, sel_a)) {
+            "top-install-pill-a"
+          } else if (!is.null(sel_b) && identical(path, sel_b)) {
+            "top-install-pill-b"
+          } else {
+            ""
+          }
+          tags$div(
+            class = paste("top-install-pill", extra),
+            tags$span(class = "top-install-pill-version", sprintf("R %s", routes$version[[i]])),
+            tags$span(class = "top-install-pill-location", route_location(path))
+          )
+        })
       )
     })
 
@@ -473,15 +552,15 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         NULL
       }
 
-      empty_text <- "Run Compare, choose a sync direction, then watch package activity here."
+      empty_text <- "Click Scout to find installations, then Inventory. Activity appears here."
       tags$div(
         class = paste("sync-log", if (length(entries) == 0) "sync-log-empty" else ""),
         tags$div(
           class = "sync-log-title",
-          "Sync log",
+          "Log panel",
           tags$span(
             class = "sync-log-subtitle",
-            if (length(entries) == 0) "Waiting for sync activity" else "Detailed package actions and post-sync comparison refresh"
+            if (length(entries) == 0) "Waiting for activity" else "Detection, package actions, and post-sync comparison refresh"
           )
         ),
         progress_ui,
@@ -493,7 +572,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       )
     })
 
-    session$onFlushed(load_routes, once = TRUE)
+    # No automatic detection on startup — the user clicks Detect (see observer
+    # below), which calls load_routes() and shares the result via routes_cache.
 
     observeEvent(input$install_a, {
       if (is.function(install_a_path)) {
@@ -509,23 +589,92 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       comparison_data(NULL)
     }, ignoreNULL = FALSE)
 
+    # Relabel the sync-direction choices with the actual R versions selected.
+    observe({
+      va <- route_version(input$install_a)
+      vb <- route_version(input$install_b)
+      a_lbl <- if (is.na(va)) "A" else paste0("R ", va)
+      b_lbl <- if (is.na(vb)) "B" else paste0("R ", vb)
+      current <- isolate(input$sync_direction)
+      choices <- stats::setNames(
+        c("A_to_B", "B_to_A", "full"),
+        c(
+          paste0(a_lbl, " → ", b_lbl),
+          paste0(b_lbl, " → ", a_lbl),
+          paste0("Two-way (", a_lbl, " ⇌ ", b_lbl, ")")
+        )
+      )
+      updateSelectInput(session, "sync_direction", choices = choices,
+                        selected = if (!is.null(current) && nzchar(current)) current else "A_to_B")
+    })
+
+    # Disable sync controls when there is nothing to transfer (all packages identical).
+    observe({
+      comp <- comparison_data()
+      all_same <- !is.null(comp) && nrow(comp) > 0 && all(comp[["status"]] == "same")
+      shinyjs::toggleState("transfer_mode",  condition = !all_same)
+      shinyjs::toggleState("sync_direction", condition = !all_same)
+      shinyjs::toggleState("sync_btn",       condition = !all_same)
+    })
+
+    re_enable_btn <- function(input_id) {
+      shinyjs::runjs(sprintf(
+        "var b = document.getElementById('%s'); if (b) b.disabled = false;",
+        ns(input_id)
+      ))
+    }
+    re_enable_compare <- function() re_enable_btn("compare")
+
+    mode_description <- function(mode) {
+      switch(
+        mode %||% "online",
+        online   = "Reinstall each package from CRAN / GitHub / Bioconductor via pak.",
+        offline  = "Copy package files directly. Packages without a valid source path are skipped.",
+        preserve = "Copy files first; anything that cannot be copied is reinstalled at the same version.",
+        "Packages are transferred using the selected mode."
+      )
+    }
+
+    output$transfer_mode_desc <- renderUI({
+      tags$div(class = "sync-mode-desc", mode_description(input$transfer_mode))
+    })
+
+    observeEvent(input$detect, {
+      sync_log(character())
+      set_sync_progress(0, "Detecting R installations", active = TRUE)
+      withProgress(message = "Detecting R installations…", value = 0, {
+        load_routes()
+      })
+      # Share detected routes with the other tabs (Advanced > Packages, etc.).
+      if (is.function(routes_cache)) routes_cache(isolate(routes_data()))
+      set_sync_progress(100, "Detection complete", active = FALSE)
+      re_enable_btn("detect")
+    })
+
     observeEvent(input$compare, {
       a_path <- input$install_a
       b_path <- input$install_b
 
       if (is.null(a_path) || !nzchar(a_path) || is.null(b_path) || !nzchar(b_path)) {
+        re_enable_compare()
         showNotification("Select two R installations first.", type = "warning")
         return()
       }
 
       if (identical(a_path, b_path)) {
+        re_enable_compare()
         showNotification("Choose two different R installations.", type = "warning")
         return()
       }
 
+      sync_log(character())
+      add_sync_log("Starting comparison…")
+      set_sync_progress(0, "Comparing installations", active = TRUE)
+
       tryCatch({
-        set_sync_progress(0, "Starting comparison", active = TRUE)
-        refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
+        withProgress(message = "Comparing R installations…", value = 0, {
+          refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
+        })
         set_sync_progress(100, "Comparison ready", active = FALSE)
       }, error = function(e) {
         set_sync_progress(0, "Comparison failed", active = FALSE)
@@ -533,6 +682,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         showNotification(paste("Comparison failed:", e$message), type = "error", duration = NULL)
         if (is.function(push_error)) push_error(e$message, context = "Comparing R libraries")
       })
+
+      re_enable_compare()
     })
 
     sync_comparison <- reactive({
@@ -551,27 +702,27 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
           ),
           filter = "top",
           options = list(dom = "ft"),
-          caption = htmltools::tags$caption("Select two installations and click Compare.")
+          caption = htmltools::tags$caption("Select two installations and click Inventory.")
         ))
       }
 
       a_version <- route_version(input$install_a)
       b_version <- route_version(input$install_b)
       raw_status <- comp[["status"]]
+      a_lbl <- if (is.na(a_version)) "A" else paste0("R ", a_version)
+      b_lbl <- if (is.na(b_version)) "B" else paste0("R ", b_version)
       status_labels <- raw_status
-      if (!is.na(a_version)) {
-        status_labels[status_labels == "newer-in-A"]    <- paste0("newer in R ", a_version)
-        status_labels[status_labels == "missing-from-A"] <- paste0("not in R ", a_version)
-      }
-      if (!is.na(b_version)) {
-        status_labels[status_labels == "newer-in-B"]    <- paste0("newer in R ", b_version)
-        status_labels[status_labels == "missing-from-B"] <- paste0("not in R ", b_version)
-      }
+      status_labels[raw_status == "same"]           <- "same"
+      status_labels[raw_status == "newer-in-A"]     <- paste0("newer in ", a_lbl)
+      status_labels[raw_status == "newer-in-B"]     <- paste0("newer in ", b_lbl)
+      status_labels[raw_status == "missing-from-A"] <- paste0("not in ", a_lbl)
+      status_labels[raw_status == "missing-from-B"] <- paste0("not in ", b_lbl)
+
       display <- data.frame(
         package = comp[["package"]],
         version_in_a = ifelse(is.na(comp[["version_in_a"]]), "not installed", comp[["version_in_a"]]),
         version_in_b = ifelse(is.na(comp[["version_in_b"]]), "not installed", comp[["version_in_b"]]),
-        status = mapply(status_badge, raw_status, status_labels, SIMPLIFY = TRUE),
+        status = factor(status_labels),
         status_raw = raw_status,
         status_rank = match(raw_status, c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")),
         stringsAsFactors = FALSE
@@ -582,11 +733,12 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       DT::datatable(
         display,
         rownames = FALSE,
-        escape = FALSE,
+        escape = TRUE,
+        width = "100%",
         colnames = c(
           "Package",
-          r_badge(a_version, "a"),
-          r_badge(b_version, "b"),
+          paste0("Version in ", a_lbl),
+          paste0("Version in ", b_lbl),
           "Status",
           "status_raw",
           "status_rank"
@@ -595,32 +747,11 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         options = list(
           pageLength = 50,
           lengthMenu = c(25, 50, 100, -1),
-          scrollX = TRUE,
-          autoWidth = TRUE,
+          scrollX = FALSE,
+          autoWidth = FALSE,
+          dom = "rt<'sync-table-foot'lip>",
           order = list(list(5, "asc"), list(0, "asc")),
-          columnDefs = list(list(targets = c(4, 5), visible = FALSE)),
-          drawCallback = DT::JS("function(settings) {
-            var node = this.api().table().node();
-            if ($(node).data('dtFilterSetup')) return;
-            $(node).data('dtFilterSetup', true);
-            var api = this.api();
-            var inputs = $(api.table().header()).find('input[type=\"search\"]');
-            inputs.eq(1).closest('th').empty();
-            inputs.eq(2).closest('th').empty();
-            var statusTh = inputs.eq(3).closest('th');
-            var sel = $('<select style=\"width:100%;padding:3px 6px;border:1px solid #ced4da;border-radius:6px;font-size:0.85em;background:#fff\">' +
-              '<option value=\"\">All statuses</option>' +
-              '<option value=\"same\">Same</option>' +
-              '<option value=\"newer-in-A\">Newer in A</option>' +
-              '<option value=\"newer-in-B\">Newer in B</option>' +
-              '<option value=\"missing-from-A\">Missing from A</option>' +
-              '<option value=\"missing-from-B\">Missing from B</option>' +
-              '</select>');
-            statusTh.empty().append(sel);
-            sel.on('change', function() {
-              api.column(4).search(this.value).draw();
-            });
-          }")
+          columnDefs = list(list(targets = c(4, 5), visible = FALSE))
         ),
         class = "stripe hover compact sync-table"
       ) |>
@@ -643,13 +774,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
     })
 
     show_sync_confirmation <- function(plan) {
-      mode_note <- switch(
-        input$transfer_mode,
-        online = "Packages will be reinstalled from CRAN / GitHub / Bioconductor.",
-        offline = "Packages will be copied by file. Packages without a valid source path will be skipped.",
-        preserve = "Packages will be copied first. Any that cannot be copied will be reinstalled at the same version.",
-        "Packages will be transferred using the selected mode."
-      )
+      mode_note <- mode_description(input$transfer_mode)
 
       if (plan$type == "full") {
         package_count <- length(plan$packages_a_to_b) + length(plan$packages_b_to_a)
@@ -669,7 +794,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
       }
 
       showModal(modalDialog(
-        title = "Confirm Sync",
+        title = "Confirm Ship",
         tags$p(msg),
         tags$p(tags$strong("Transfer mode: "), mode_note),
         easyClose = TRUE,
@@ -683,7 +808,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
     observeEvent(input$sync_btn, {
       comp <- sync_comparison()
       if (is.null(comp)) {
-        showNotification("Run Compare first.", type = "warning")
+        showNotification("Run Inventory first.", type = "warning")
         return()
       }
 
@@ -844,35 +969,35 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, pu
         } else {
           sum(comp_after[["status"]] != "same")
         }
-        set_sync_progress(100, "Sync complete", active = TRUE)
+        set_sync_progress(100, "Ship complete", active = TRUE)
         add_sync_log("Post-sync comparison refreshed: ", comparison_counts_text(comp_after), ".")
         list(count = total_count, failed = failed_count, remaining = remaining)
       }, error = function(e) {
-        set_sync_progress(0, "Sync failed", active = FALSE)
-        add_sync_log("Sync failed: ", e$message)
-        showNotification(paste("Sync failed:", e$message), type = "error", duration = NULL)
-        if (is.function(push_error)) push_error(e$message, context = "Syncing packages")
+        set_sync_progress(0, "Ship failed", active = FALSE)
+        add_sync_log("Ship failed: ", e$message)
+        showNotification(paste("Ship failed:", e$message), type = "error", duration = NULL)
+        if (is.function(push_error)) push_error(e$message, context = "Shipping packages")
         NULL
       })
 
       if (!is.null(result)) {
-        add_sync_log(sprintf("Sync complete. %d package(s) processed.", result$count))
+        add_sync_log(sprintf("Ship complete. %d package(s) processed.", result$count))
         if (result$failed > 0) {
           showNotification(
-            sprintf("Sync finished with %d failed package(s). See sync log.", result$failed),
+            sprintf("Ship finished with %d failed package(s). See the log panel.", result$failed),
             type = "warning",
             duration = NULL
           )
         } else if (!is.na(result$remaining) && result$remaining > 0) {
           showNotification(
-            sprintf("Sync finished, but %d package difference(s) remain. See sync log.", result$remaining),
+            sprintf("Ship finished, but %d package difference(s) remain. See the log panel.", result$remaining),
             type = "warning",
             duration = NULL
           )
         } else {
           showNotification(sprintf("Sync complete. %d package(s) processed; comparison refreshed.", result$count), type = "message")
         }
-        set_sync_progress(100, "Sync complete", active = FALSE)
+        set_sync_progress(100, "Ship complete", active = FALSE)
       }
 
       pending_sync(NULL)
