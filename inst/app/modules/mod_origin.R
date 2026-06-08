@@ -81,7 +81,7 @@ mod_origin_server <- function(id,
       routes <- routes_rv()
       if (detecting()) return(NULL)
       if (is.null(routes)) {
-        return(tags$p(class = "update-no-selection", "Click Scout in the Sync tab to find installations."))
+        return(tags$p(class = "update-no-selection", "Switch to Dispatch and run Compare to detect installations."))
       }
       if (nrow(routes) == 0) {
         return(tags$p(class = "update-no-selection", "No depots detected."))

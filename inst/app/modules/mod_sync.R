@@ -1136,18 +1136,36 @@ mod_sync_server <- function(id,
     })
 
     # ── Delivery Receipt panel ────────────────────────────────────────────
+    output$receipt_results_dt <- DT::renderDataTable({
+      res <- last_ship_result()
+      if (is.null(res) || is.null(res$results) || nrow(res$results) == 0)
+        return(DT::datatable(data.frame(), options = list(dom = "t"), rownames = FALSE))
+      DT::datatable(res$results,
+        options = list(pageLength = 15, dom = "tip"), rownames = FALSE)
+    })
+
+    output$receipt_plan_dt <- DT::renderDataTable({
+      res <- last_ship_result()
+      if (is.null(res) || is.null(res$plan) || nrow(res$plan) == 0)
+        return(DT::datatable(data.frame(), options = list(dom = "t"), rownames = FALSE))
+      plan <- res$plan
+      cols <- intersect(c("package", "version.x", "action", "source", "pak_spec"),
+                        names(plan))
+      DT::datatable(plan[, cols, with = FALSE],
+        options = list(pageLength = 15, dom = "tip"), rownames = FALSE)
+    })
+
     output$delivery_receipt_panel <- renderUI({
       res <- last_ship_result()
       if (is.null(res)) return(NULL)
 
       results <- res$results
-      plan    <- res$plan
       elapsed <- res$elapsed_sec %||% 0
 
       n_total <- if (!is.null(results)) nrow(results) else 0L
       n_ok    <- if (!is.null(results)) sum(results$status == "success") else 0L
       n_err   <- n_total - n_ok
-      theme   <- if (n_err == 0) "success" else if (n_ok == 0) "danger" else "warning"
+      theme   <- if (n_total == 0L) "secondary" else if (n_err == 0) "success" else if (n_ok == 0) "danger" else "warning"
 
       bslib::card(
         class = "sync-receipt-card",
@@ -1163,26 +1181,15 @@ mod_sync_server <- function(id,
             sprintf("%d / %d packages delivered", n_ok, n_total),
             theme = theme
           ),
-          if (!is.null(results) && nrow(results) > 0) {
+          if (n_total > 0) {
+            plan <- res$plan
             bslib::navset_card_tab(
               bslib::nav_panel("Results",
-                DT::renderDataTable(
-                  DT::datatable(results,
-                    options = list(pageLength = 15, dom = "tip"),
-                    rownames = FALSE
-                  )
-                )
+                DT::dataTableOutput(ns("receipt_results_dt"))
               ),
               bslib::nav_panel("Plan",
                 if (!is.null(plan) && nrow(plan) > 0) {
-                  cols <- intersect(c("package", "version.x", "action", "source", "pak_spec"),
-                                    names(plan))
-                  DT::renderDataTable(
-                    DT::datatable(plan[, cols, with = FALSE],
-                      options = list(pageLength = 15, dom = "tip"),
-                      rownames = FALSE
-                    )
-                  )
+                  DT::dataTableOutput(ns("receipt_plan_dt"))
                 } else {
                   tags$p("No plan details available.")
                 }

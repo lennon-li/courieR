@@ -420,6 +420,14 @@ mod_depot_ship_server <- function(id,
     })
 
     # ── Inline receipt after depot ship ────────────────────────────────────
+    output$depot_receipt_dt <- DT::renderDataTable({
+      res <- depot_ship_result()
+      if (is.null(res) || is.null(res$results) || nrow(res$results) == 0)
+        return(DT::datatable(data.frame(), options = list(dom = "t"), rownames = FALSE))
+      DT::datatable(res$results,
+        options = list(pageLength = 15, dom = "tip"), rownames = FALSE)
+    })
+
     output$depot_receipt <- renderUI({
       res <- depot_ship_result()
       if (is.null(res)) return(NULL)
@@ -427,7 +435,8 @@ mod_depot_ship_server <- function(id,
       results <- res$results
       n_total <- if (!is.null(results)) nrow(results) else 0L
       n_ok    <- if (!is.null(results)) sum(results$status == "success") else 0L
-      theme   <- if (n_ok == n_total) "success" else if (n_ok == 0L) "danger" else "warning"
+      n_err   <- n_total - n_ok
+      theme   <- if (n_total == 0L) "secondary" else if (n_err == 0L) "success" else if (n_ok == 0L) "danger" else "warning"
 
       bslib::card(
         class = "sync-receipt-card",
@@ -439,13 +448,8 @@ mod_depot_ship_server <- function(id,
             sprintf("%.1fs", res$elapsed_sec %||% 0),
             theme = theme
           ),
-          if (!is.null(results) && nrow(results) > 0L) {
-            DT::renderDataTable(
-              DT::datatable(results,
-                options = list(pageLength = 15, dom = "tip"),
-                rownames = FALSE
-              )
-            )
+          if (n_total > 0L) {
+            DT::dataTableOutput(ns("depot_receipt_dt"))
           }
         )
       )
