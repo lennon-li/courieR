@@ -1143,3 +1143,176 @@ body {
   font-size: 0.65rem;
   font-weight: 800;
 }
+
+/* ── Advanced tab badge ── */
+.advanced-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: #5f4ab4;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* ── Restock sidebar ── */
+.sync-restock-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sync-restock-btn {
+  width: 100%;
+  background: #f5f8fb;
+  border: 1px solid #d0dde8;
+  color: #355066;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.sync-restock-btn:hover {
+  background: #e8f0f7;
+  border-color: #aac4d8;
+}
+
+/* ── Depot ship hint (Dispatch tab) ── */
+.sync-summary-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.depot-ship-hint {
+  font-size: 0.78rem;
+  color: #7a95a8;
+  margin: 0;
+}
+
+.depot-ship-hint a {
+  color: #1d6fa5;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.depot-ship-hint a:hover {
+  text-decoration: underline;
+}
+
+/* ── Delivery receipt panel ── */
+.sync-receipt-card {
+  margin-top: 1rem;
+}
+
+.sync-receipt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sync-receipt-elapsed {
+  font-size: 0.78rem;
+  color: #7a95a8;
+  font-weight: 400;
+}
+
+/* ── Depot Ship pane ── */
+.depot-ship-pane {
+  padding: 0.75rem 0.25rem;
+}
+
+.depot-ship-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.5rem 0.75rem;
+  background: #f5f8fb;
+  border: 1px solid #dde8f0;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+  font-size: 0.82rem;
+}
+
+.depot-ship-context-empty {
+  color: #9aabba;
+  font-style: italic;
+}
+
+.depot-ship-context-sep {
+  font-weight: 800;
+  color: #5f4ab4;
+}
+
+.depot-ship-context-mode {
+  margin-left: auto;
+  color: #6d879b;
+}
+
+.depot-ship-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.depot-ship-bulk {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.depot-bulk-apply-btn {
+  background: #f0f2f5;
+  border: 1px solid #ccd8e2;
+  color: #355066;
+  font-weight: 600;
+  border-radius: 7px;
+}
+
+.depot-bulk-apply-btn:hover {
+  background: #e0eaf3;
+}
+
+.depot-ship-summary {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.depot-summary-online { color: #1d6fa5; }
+.depot-summary-ship   { color: #c27a3a; }
+.depot-summary-skip   { color: #9aabba; }
+
+.depot-ship-footer {
+  margin-top: 0.5rem;
+}
+
+.depot-ship-execute-btn {
+  min-width: 120px;
+}
+
+/* ── Browse → Ship button ── */
+.browse-to-ship-btn {
+  margin-top: 0.5rem;
+  background: #eef6ff;
+  border: 1px solid #b3d4f0;
+  color: #1d6fa5;
+  font-weight: 600;
+  border-radius: 7px;
+}
