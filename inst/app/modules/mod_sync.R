@@ -41,6 +41,15 @@ mod_sync_ui <- function(id) {
         ), selected = "A_to_B")
       ),
       actionButton(ns("sync_btn"), "Ship", class = "btn sync-compare-btn"),
+      hr(),
+      tags$div(class = "sync-select-label", "Maintenance"),
+      div(
+        class = "sync-restock-wrap",
+        actionButton(ns("restock_a"), "Restock A from CRAN",
+                     class = "btn sync-restock-btn"),
+        actionButton(ns("restock_b"), "Restock B from CRAN",
+                     class = "btn sync-restock-btn")
+      ),
     ),
     div(
       id = "nav-progress-wrap",
@@ -64,11 +73,20 @@ mod_sync_ui <- function(id) {
           )
         )
       )
-    )
+    ),
+    uiOutput(ns("delivery_receipt_panel"))
   )
 }
 
-mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, routes_cache = NULL, push_error = NULL) {
+mod_sync_server <- function(id,
+                            install_a_path     = NULL,
+                            install_b_path     = NULL,
+                            routes_cache       = NULL,
+                            push_error         = NULL,
+                            comparison_out     = NULL,
+                            actionable_out     = NULL,
+                            sync_direction_out = NULL,
+                            transfer_mode_out  = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending_sync     <- reactiveVal(NULL)
@@ -81,6 +99,7 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
     sync_pct         <- reactiveVal(0)
     sync_step        <- reactiveVal("Idle")
     selected_statuses <- reactiveVal(NULL)
+    last_ship_result  <- reactiveVal(NULL)
 
     r_label <- function(path, version) {
       loc <- if (grepl("AppData", path, ignore.case = TRUE)) {
@@ -541,13 +560,29 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       na_lbl <- if (!is.na(a_version)) paste("not in R", a_version) else "missing from A"
       nb_lbl <- if (!is.na(b_version)) paste("not in R", b_version) else "missing from B"
 
+      hint_ui <- if (any(comp[["status"]] != "same")) {
+        tags$p(
+          class = "depot-ship-hint",
+          "Cherry-pick packages → ",
+          tags$a(
+            href    = "#",
+            onclick = "navigateToDepotShip(); return false;",
+            "Advanced › Depot › Ship"
+          )
+        )
+      } else NULL
+
       div(
-        class = "sync-summary-bar",
-        make_chip("same",          "identical",  "chip-same"),
-        make_chip("newer-in-A",    a_lbl,        "chip-diff-a"),
-        make_chip("newer-in-B",    b_lbl,        "chip-diff-b"),
-        make_chip("missing-from-B", nb_lbl,      "chip-diff-a"),
-        make_chip("missing-from-A", na_lbl,      "chip-diff-b")
+        class = "sync-summary-wrap",
+        div(
+          class = "sync-summary-bar",
+          make_chip("same",           "identical",  "chip-same"),
+          make_chip("newer-in-A",     a_lbl,        "chip-diff-a"),
+          make_chip("newer-in-B",     b_lbl,        "chip-diff-b"),
+          make_chip("missing-from-B", nb_lbl,       "chip-diff-a"),
+          make_chip("missing-from-A", na_lbl,       "chip-diff-b")
+        ),
+        hint_ui
       )
     })
 
@@ -650,6 +685,15 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
                         selected = if (!is.null(current) && nzchar(current)) current else "A_to_B")
     })
 
+    observe({
+      if (is.function(sync_direction_out))
+        sync_direction_out(input$sync_direction %||% "A_to_B")
+    })
+    observe({
+      if (is.function(transfer_mode_out))
+        transfer_mode_out(input$transfer_mode %||% "online")
+    })
+
     # Disable sync controls when there is nothing to transfer (all packages identical).
     observe({
       comp <- comparison_data()
@@ -705,6 +749,10 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
         return()
       }
 
+      if (is.function(comparison_out))  comparison_out(NULL)
+      if (is.function(actionable_out))  actionable_out(0L)
+      last_ship_result(NULL)
+
       sync_log(character())
       selected_statuses(NULL)
       add_sync_log("Starting comparison…")
@@ -717,6 +765,9 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
         if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
           selected_statuses(diff_statuses)
         }
+        if (is.function(comparison_out)) comparison_out(comparison_data())
+        diff_n <- sum(comparison_data()[["status"]] != "same")
+        if (is.function(actionable_out)) actionable_out(diff_n)
         set_sync_progress(100, "Comparison ready", active = FALSE)
       }, error = function(e) {
         set_sync_progress(0, "Comparison failed", active = FALSE)
@@ -919,6 +970,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       add_sync_log("Base and recommended R packages are skipped; only user-installed packages are compared/synced.")
       add_sync_log("Current comparison before sync: ", comparison_counts_text(comparison_data()), ".")
 
+      ship_start_time <- Sys.time()
+
       result <- tryCatch({
         set_sync_progress(5, "Preparing sync plan", active = TRUE)
 
@@ -951,6 +1004,8 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
 
         total_count <- sum(vapply(batches, function(batch) length(batch$packages), integer(1)))
         failed_count <- 0L
+        accumulated_results <- list()
+        accumulated_plans   <- list()
         add_sync_log("Estimated sync time: ", estimate_sync_time(total_count), ".")
         batch_progress <- if (length(batches) == 0) 0 else 65 / length(batches)
         progress_start <- 10
@@ -989,6 +1044,11 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
           add_plan_log(ship_result)
           add_result_log(ship_result)
 
+          if (!is.null(ship_result$results) && nrow(ship_result$results) > 0)
+            accumulated_results[[i]] <- ship_result$results
+          if (!is.null(ship_result$plan) && nrow(ship_result$plan) > 0)
+            accumulated_plans[[i]] <- ship_result$plan
+
           if ("results" %in% names(ship_result) && nrow(ship_result$results) > 0) {
             failures <- ship_result$results[ship_result$results$status == "error", ]
             failed_count <- failed_count + nrow(failures)
@@ -1008,6 +1068,23 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
 
           set_sync_progress(progress_start + i * batch_progress, sprintf("Finished %s sync", batch$label), active = TRUE)
         }
+
+        all_results <- if (length(accumulated_results) > 0)
+          data.table::rbindlist(accumulated_results, fill = TRUE)
+        else
+          data.table::data.table(package = character(), status = character(), message = character())
+
+        all_plans <- if (length(accumulated_plans) > 0)
+          data.table::rbindlist(accumulated_plans, fill = TRUE)
+        else
+          data.table::data.table(package = character(), action = character())
+
+        elapsed <- as.numeric(difftime(Sys.time(), ship_start_time, units = "secs"))
+        last_ship_result(list(
+          results     = all_results,
+          plan        = all_plans,
+          elapsed_sec = elapsed
+        ))
 
         set_sync_progress(80, "Refreshing comparison after sync", active = TRUE)
         add_sync_log("Refreshing comparison after sync.")
@@ -1056,6 +1133,184 @@ mod_sync_server <- function(id, install_a_path = NULL, install_b_path = NULL, ro
       }
 
       pending_sync(NULL)
+    })
+
+    # ── Delivery Receipt panel ────────────────────────────────────────────
+    output$delivery_receipt_panel <- renderUI({
+      res <- last_ship_result()
+      if (is.null(res)) return(NULL)
+
+      results <- res$results
+      plan    <- res$plan
+      elapsed <- res$elapsed_sec %||% 0
+
+      n_total <- if (!is.null(results)) nrow(results) else 0L
+      n_ok    <- if (!is.null(results)) sum(results$status == "success") else 0L
+      n_err   <- n_total - n_ok
+      theme   <- if (n_err == 0) "success" else if (n_ok == 0) "danger" else "warning"
+
+      bslib::card(
+        class = "sync-receipt-card",
+        bslib::card_header(
+          class = "sync-receipt-header",
+          tags$span("Delivery Receipt"),
+          tags$span(class = "sync-receipt-elapsed",
+                    sprintf("%.1fs", elapsed))
+        ),
+        bslib::card_body(
+          bslib::value_box(
+            "Result",
+            sprintf("%d / %d packages delivered", n_ok, n_total),
+            theme = theme
+          ),
+          if (!is.null(results) && nrow(results) > 0) {
+            bslib::navset_card_tab(
+              bslib::nav_panel("Results",
+                DT::renderDataTable(
+                  DT::datatable(results,
+                    options = list(pageLength = 15, dom = "tip"),
+                    rownames = FALSE
+                  )
+                )
+              ),
+              bslib::nav_panel("Plan",
+                if (!is.null(plan) && nrow(plan) > 0) {
+                  cols <- intersect(c("package", "version.x", "action", "source", "pak_spec"),
+                                    names(plan))
+                  DT::renderDataTable(
+                    DT::datatable(plan[, cols, with = FALSE],
+                      options = list(pageLength = 15, dom = "tip"),
+                      rownames = FALSE
+                    )
+                  )
+                } else {
+                  tags$p("No plan details available.")
+                }
+              )
+            )
+          }
+        )
+      )
+    })
+
+    # ── Restock ───────────────────────────────────────────────────────────
+    restock_pending <- reactiveVal(NULL)
+
+    do_restock <- function(path_fn, label) {
+      path <- if (is.function(path_fn)) path_fn() else path_fn
+      if (is.null(path) || !nzchar(path)) {
+        showNotification("Select an installation in the Dispatch tab first.",
+                         type = "warning")
+        return()
+      }
+      pkgs <- tryCatch(
+        courieR::manifest(rscript_path = path),
+        error = function(e) {
+          showNotification(paste("Scan failed:", e$message), type = "error")
+          if (is.function(push_error))
+            push_error(e$message, context = "Scanning packages for restock")
+          NULL
+        }
+      )
+      if (is.null(pkgs)) return()
+      pkgs <- pkgs[is.na(pkgs$priority) |
+                     !(pkgs$priority %in% c("base", "recommended")), ]
+      cran_mask <- !is.na(pkgs$source) & pkgs$source == "CRAN"
+      cran_pkgs <- pkgs$package[cran_mask]
+      non_cran  <- pkgs[!cran_mask, ]
+
+      restock_pending(list(path = path, label = label, cran_pkgs = cran_pkgs))
+
+      warning_ui <- if (nrow(non_cran) > 0) {
+        src_raw <- ifelse(
+          is.na(non_cran$source) | non_cran$source == "unknown",
+          "unknown / other", non_cran$source
+        )
+        src_tbl   <- sort(table(src_raw), decreasing = TRUE)
+        src_items <- mapply(
+          function(n, s) tags$li(sprintf("%d package(s) from %s", n, s)),
+          as.integer(src_tbl), names(src_tbl), SIMPLIFY = FALSE
+        )
+        preview <- paste(head(non_cran$package, 8), collapse = ", ")
+        if (nrow(non_cran) > 8)
+          preview <- paste0(preview, sprintf(", … +%d more", nrow(non_cran) - 8))
+        tags$div(
+          class = "update-modal-warning",
+          tags$p(tags$strong(sprintf(
+            "%d package(s) will be skipped — not from CRAN:", nrow(non_cran)
+          ))),
+          tags$ul(class = "update-modal-warning-list", src_items),
+          tags$p(class = "update-modal-warning-pkgs", preview),
+          tags$p(class = "update-modal-warning-note",
+                 "GitHub, Bioconductor, and unknown-source packages must be updated manually.")
+        )
+      } else NULL
+
+      showModal(modalDialog(
+        title = paste0("Restock Installation ", label, " from CRAN"),
+        if (length(cran_pkgs) > 0) {
+          tags$p(sprintf("%d CRAN package(s) will be upgraded to their latest versions.",
+                         length(cran_pkgs)))
+        } else {
+          tags$p("No CRAN packages found to update.")
+        },
+        warning_ui,
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          if (length(cran_pkgs) > 0) {
+            actionButton(ns("confirm_restock"), "Restock", class = "btn btn-primary")
+          } else {
+            tags$span(class = "text-muted small", "Nothing to update.")
+          }
+        )
+      ))
+    }
+
+    observeEvent(input$restock_a, { do_restock(install_a_path, "A") })
+    observeEvent(input$restock_b, { do_restock(install_b_path, "B") })
+
+    observeEvent(input$confirm_restock, {
+      plan <- restock_pending()
+      removeModal()
+      if (is.null(plan) || length(plan$cran_pkgs) == 0) return()
+
+      lib_res <- processx::run(
+        plan$path, c("--vanilla", "-e", "cat(.libPaths()[1])"),
+        error_on_status = FALSE
+      )
+      tgt_lib <- trimws(lib_res$stdout)
+      if (lib_res$status != 0 || !nzchar(tgt_lib)) {
+        showNotification("Could not determine library path.", type = "error")
+        return()
+      }
+
+      specs <- plan$cran_pkgs
+      ok <- tryCatch({
+        callr::r(
+          func = function(specs, lib) {
+            pak::pkg_install(specs, lib = lib, ask = FALSE, upgrade = TRUE)
+          },
+          args = list(specs = specs, lib = tgt_lib),
+          show = FALSE
+        )
+        TRUE
+      }, error = function(e) {
+        showNotification(paste("Restock failed:", e$message),
+                         type = "error", duration = NULL)
+        if (is.function(push_error))
+          push_error(e$message, context = "Restocking packages")
+        FALSE
+      })
+
+      restock_pending(NULL)
+      if (ok) {
+        showNotification(
+          sprintf("Restocked %d package(s) in installation %s.",
+                  length(specs), plan$label),
+          type = "message"
+        )
+      }
     })
   })
 }
