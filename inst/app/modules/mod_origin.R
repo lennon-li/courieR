@@ -1,25 +1,43 @@
 mod_origin_ui <- function(id) {
   ns <- NS(id)
-  tagList(
-    bslib::card(
-      bslib::card_header("Detected Depots"),
-      bslib::card_body(
-        uiOutput(ns("detecting_msg")),
-        DT::dataTableOutput(ns("r_installs"))
+  bslib::navset_card_tab(
+    id = ns("depot_tabs"),
+    bslib::nav_panel(
+      "Browse",
+      tagList(
+        bslib::card(
+          bslib::card_header("Detected Depots"),
+          bslib::card_body(
+            uiOutput(ns("detecting_msg")),
+            DT::dataTableOutput(ns("r_installs"))
+          )
+        ),
+        bslib::card(
+          bslib::card_header("Depot Manifest"),
+          bslib::card_body(
+            uiOutput(ns("pkg_controls")),
+            uiOutput(ns("loading_msg")),
+            DT::dataTableOutput(ns("packages")),
+            uiOutput(ns("browse_to_ship_btn"))
+          )
+        )
       )
     ),
-    bslib::card(
-      bslib::card_header("Depot Manifest"),
-      bslib::card_body(
-        uiOutput(ns("pkg_controls")),
-        uiOutput(ns("loading_msg")),
-        DT::dataTableOutput(ns("packages"))
-      )
+    bslib::nav_panel(
+      "Ship",
+      mod_depot_ship_ui(ns("depot_ship"))
     )
   )
 }
 
-mod_origin_server <- function(id, from_r_path = NULL, routes_cache = NULL, push_error = NULL) {
+mod_origin_server <- function(id,
+                              from_r_path       = NULL,
+                              routes_cache      = NULL,
+                              push_error        = NULL,
+                              comparison_rv     = NULL,
+                              to_r_path         = NULL,
+                              sync_direction_rv  = NULL,
+                              transfer_mode_rv   = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     routes_rv  <- reactiveVal(NULL)
@@ -116,7 +134,6 @@ mod_origin_server <- function(id, from_r_path = NULL, routes_cache = NULL, push_
       pkgs <- pkg_data()
       pkgs <- pkgs[is.na(pkgs$priority) | !(pkgs$priority %in% c("base", "recommended")), ]
 
-      # Build a human-readable source label
       src_label <- vapply(seq_len(nrow(pkgs)), function(i) {
         s  <- pkgs$source[[i]]
         rt <- if ("remotetype"     %in% names(pkgs)) pkgs$remotetype[[i]]     else NA_character_
@@ -178,5 +195,45 @@ mod_origin_server <- function(id, from_r_path = NULL, routes_cache = NULL, push_
       updateSelectInput(session, "selected_path", choices = choices,
                         selected = routes$rscript_path[[1]])
     }, ignoreNULL = TRUE)
+
+    # ── Browse → Ship bridge ──────────────────────────────────────────────
+    browse_to_ship_pkg <- reactiveVal(NULL)
+
+    output$browse_to_ship_btn <- renderUI({
+      req(pkg_data())
+      selected <- input$packages_rows_selected
+      if (length(selected) == 0) return(NULL)
+      pkgs <- pkg_data()
+      pkgs <- pkgs[is.na(pkgs$priority) |
+                     !(pkgs$priority %in% c("base", "recommended")), ]
+      pkg_name <- pkgs$package[selected[[1]]]
+      actionButton(
+        ns("view_in_ship"), sprintf("View '%s' in Ship", pkg_name),
+        class = "btn btn-sm browse-to-ship-btn"
+      )
+    })
+
+    observeEvent(input$view_in_ship, {
+      selected <- input$packages_rows_selected
+      if (length(selected) == 0) return()
+      pkgs <- pkg_data()
+      pkgs <- pkgs[is.na(pkgs$priority) |
+                     !(pkgs$priority %in% c("base", "recommended")), ]
+      pkg_name <- pkgs$package[selected[[1]]]
+      browse_to_ship_pkg(pkg_name)
+      bslib::nav_select(ns("depot_tabs"), "Ship", session = session)
+    })
+
+    # ── Ship sub-module ───────────────────────────────────────────────────
+    mod_depot_ship_server(
+      "depot_ship",
+      comparison_rv     = comparison_rv,
+      from_r_path       = from_r_path,
+      to_r_path         = to_r_path,
+      sync_direction_rv  = sync_direction_rv,
+      transfer_mode_rv   = transfer_mode_rv,
+      push_error        = push_error,
+      incoming_search   = browse_to_ship_pkg
+    )
   })
 }
