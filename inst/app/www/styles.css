@@ -99,11 +99,39 @@ body {
 #nav-progress-wrap {
   display: none;
   width: 100%;
+  margin-bottom: 0.6rem;
+}
+
+#nav-progress-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #4a3d7a;
+}
+
+#nav-progress-step {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-progress-elapsed {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: #5f4ab4;
+}
+
+.nav-progress-track {
+  width: 100%;
   height: 10px;
   background: #e8eef4;
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 0.6rem;
 }
 
 #nav-progress-bar {
@@ -369,12 +397,64 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.sync-mode-desc {
-  margin-top: 0.4rem;
-  color: #6d879b;
-  font-size: 0.78rem;
+/* Hint under the target dropdown when no same-or-newer install is available. */
+.sync-target-hint {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  background: #fdf2f2;
+  border-left: 3px solid #d98a8a;
+  color: #8a4a4a;
+  font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.35;
+}
+
+/* Label row that carries an inline "?" help badge to the right of the text. */
+.sync-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* "?" badge — hover shows the native tooltip (title attr) with the mode help,
+   so the explanation no longer occupies a block under the dropdown. */
+.sync-help-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d9d0f2;
+  color: #5f4ab4;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.sync-help-badge:hover {
+  background: #5f4ab4;
+  color: #ffffff;
+}
+
+/* Preview plan button — secondary/outline style under the Ship button. */
+.sync-preview-btn {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  background: #ffffff;
+  color: #5f4ab4;
+  border: 1px solid #c7bce8;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.sync-preview-btn:hover {
+  background: #f4eefb;
+  color: #4a3596;
+  border-color: #8a52c8;
 }
 
 
@@ -899,13 +979,43 @@ body {
 }
 
 .sync-log-empty pre {
-  color: #6d879b;
-  font-style: italic;
+  color: #183247;
 }
 
 .sync-log-error {
   color: #c0392b;
   font-weight: 700;
+}
+
+/* ── Keep the log panel fully visible while Shiny is recalculating ──
+   Shiny >=1.9 busy-indicators fade the *children* of a .recalculating output
+   ([data-shiny-busy-spinners] .recalculating > *), not the output element
+   itself. The log re-renders on every add_sync_log() line, so during a
+   Compare/Ship it would grey on every message. Force the pane and everything
+   inside it to stay fully opaque, kill the fade transition, and suppress the
+   busy spinner overlay. (Targeting only .recalculating — the old fix — missed
+   the child that actually dims.) */
+.sync-log-pane .recalculating,
+.sync-log-pane.recalculating,
+.sync-log-pane .shiny-html-output.recalculating,
+.sync-log-pane .recalculating * {
+  opacity: 1 !important;
+  transition: none !important;
+}
+.sync-log-pane .recalculating::after {
+  display: none !important;
+}
+
+/* ── Busy state: grey out and lock the sidebar controls during a sync ──
+   Applied via the .sync-busy class toggled in set_sync_progress(). The log
+   pane lives outside the sidebar, so it is unaffected. */
+.sync-sidebar.sync-busy select,
+.sync-sidebar.sync-busy button,
+.sync-sidebar.sync-busy .selectize-control {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+  filter: grayscale(35%);
 }
 
 /* ── Ship confirmation modal ── */
@@ -932,12 +1042,6 @@ body {
   color: #5f4ab4;
 }
 
-.modal-ship-time {
-  font-size: 0.85rem;
-  color: #6d879b;
-  font-weight: 600;
-}
-
 .modal-ship-mode {
   background: #f2f0fc;
   border-left: 3px solid #8a52c8;
@@ -946,6 +1050,93 @@ body {
   font-size: 0.85rem;
   color: #3d2a8a;
   margin-top: 0.75rem;
+}
+
+/* Concrete "This will copy N · reinstall N · compile N" plan line — the
+   specific summary that leads both the Preview and Confirm modals. */
+.ship-plan-summary {
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: #eef6f0;
+  border-left: 3px solid #1f7a4d;
+  color: #1f5a3a;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.ship-plan-summary-lead {
+  font-weight: 800;
+  color: #14502f;
+}
+
+.modal-ship-mode-desc {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #5a4a8c;
+}
+
+/* ── Pre-ship invoice (itemised cost estimate) ── */
+.invoice-card {
+  margin-top: 0.85rem;
+  border: 1px solid #e2e8ee;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  background: #fbfcfd;
+}
+.invoice-head {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8595a5;
+  margin-bottom: 0.4rem;
+}
+.invoice-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.22rem 0;
+  border-bottom: 1px dashed #edf1f5;
+}
+.invoice-qty {
+  flex: 0 0 2.1rem;
+  text-align: right;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.invoice-label {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #3d4a59;
+}
+.invoice-hint {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: #8595a5;
+}
+.invoice-copy   .invoice-qty { color: #1f7a4d; }
+.invoice-binary .invoice-qty { color: #2c6fb0; }
+.invoice-source .invoice-qty { color: #c0392b; }
+/* Zero-count tier: shown for completeness but visually de-emphasised, and the
+   tier colour is overridden back to grey so "0" never reads as an action. */
+.invoice-line-zero { opacity: 0.45; }
+.invoice-line-zero .invoice-qty { color: #8595a5 !important; }
+.invoice-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  font-weight: 800;
+  color: #2c1e6e;
+}
+.invoice-total-val {
+  font-size: 1.05rem;
+  color: #5f4ab4;
 }
 
 /* ── Progress overlay (withProgress) ──────────────────────────────── */

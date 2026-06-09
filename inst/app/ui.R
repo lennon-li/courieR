@@ -9,7 +9,8 @@ ui <- bslib::page_navbar(
                  style = "vertical-align: middle; background: transparent;")
       ),
       tags$div(class = "app-version",
-               sprintf("v%s", utils::packageVersion("courieR")))
+               sprintf("v%s  ·  loaded %s", utils::packageVersion("courieR"),
+                       format(Sys.time(), "%Y-%m-%d %H:%M")))
     )
   ),
   window_title = "courieR",
