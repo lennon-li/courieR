@@ -1,9 +1,10 @@
 # Getting Started with courieR
 
 courieR syncs installed R packages between R versions on the same
-machine. You can migrate from an old version to a new one, keep two
-versions in parity, or selectively push packages in either direction —
-all from the R console or from a point-and-click dashboard.
+machine. You can migrate from an old version to a new one, or
+selectively push packages from a source installation into a target
+installation — all from the R console or from a point-and-click
+dashboard.
 
 ## Installation
 
@@ -232,6 +233,43 @@ result$plan[, c("package", "source", "pak_spec")]
 
 ------------------------------------------------------------------------
 
+## Transfer modes
+
+[`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) (and
+the dashboard’s **Transfer mode** selector) offers three
+mutually-exclusive ways to move packages. Pass one via `mode =`:
+
+| Mode | What it does | When to use |
+|----|----|----|
+| `"online"` (default) | Reinstall each package fresh via pak — latest compatible version, dependencies resolved. Pure-R and local packages are *copied* directly (no rebuild); only compiled packages are reinstalled, preferring pre-built binaries. | Moving between **different** R versions, where compiled packages must be rebuilt for the new R. |
+| `"offline"` | Copy package files directly from the source library — fast, no internet, exact same versions. | Same R **x.y** series, or air-gapped machines. |
+| `"preserve"` | Same direct copy as `offline`, but anything that can’t be copied is reinstalled via pak at its exact source version. | Same series, when you want a network safety net. |
+
+### Why copy modes need the same R x.y series
+
+A package’s **compiled code** (the `.dll`/`.so` files under `libs/`) is
+built against a specific R **minor** version’s binary interface.
+Packages compiled for R 4.5.x will not reliably load under R 4.6 — they
+must be rebuilt. So:
+
+- **Within the same series** (e.g. 4.5.0 ↔︎ 4.5.2) copying is
+  binary-safe, and `offline`/`preserve` are the fast choice.
+- **Across minor versions** (e.g. 4.5 → 4.6) compiled packages must be
+  reinstalled, so only `online` is safe. The dashboard hides the copy
+  modes for such pairs automatically.
+
+Pure-R packages (no `libs/`) are version-independent, so `online` copies
+those directly even across versions and only rebuilds the compiled
+minority.
+
+``` r
+
+# explicit mode
+ship(source_path = old_r, target_path = new_r, mode = "offline")
+```
+
+------------------------------------------------------------------------
+
 ## Common Recipes
 
 ### One-way migration (old R → new R)
@@ -267,17 +305,22 @@ new_r   <- routes$rscript_path[routes$is_current]
 result <- ship(source_path = old_r, target_path = new_r, upgrade = TRUE)
 ```
 
-### Two-way sync (keep two R versions in parity)
+### Mirror two same-version installs
+
+[`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) always
+moves packages one way, from `source_path` into `target_path`. To bring
+two same-version installations into line with each other, run it twice,
+swapping the roles:
 
 ``` r
 
 r_a <- routes$rscript_path[1]
 r_b <- routes$rscript_path[2]
 
-# push everything A has to B
+# push everything A has into B
 ship(source_path = r_a, target_path = r_b, upgrade = TRUE)
 
-# push everything B has to A
+# then push everything B has into A
 ship(source_path = r_b, target_path = r_a, upgrade = TRUE)
 ```
 
@@ -328,16 +371,16 @@ hub()
 
 1.  The dashboard scans all R installations on the machine automatically
     — no configuration needed.
-2.  Select two installations from the sidebar dropdowns (labelled A and
-    B).
+2.  Select a **source** and a **target** installation from the sidebar
+    dropdowns. The target list is constrained to the same-or-newer R
+    version than the source, since an older R can’t reliably hold
+    packages built for a newer one.
 3.  Click **Compare** — a summary strip shows counts of identical,
     missing, and version-mismatched packages. The table lists
     differences first.
-4.  Click a sync button:
-    - **Copy A → B** — installs or upgrades packages from A into B
-    - **Copy B → A** — installs or upgrades packages from B into A
-    - **Two-Way Sync** — brings both installations to parity in both
-      directions
+4.  Click **Ship** to install or upgrade the source’s packages into the
+    target. To mirror two same-version installs, run the transfer again
+    with source and target swapped.
 5.  A confirmation dialog shows the package count and an estimated time.
     Confirm to start.
 6.  The log pane shows real-time progress: each package, its pak spec,

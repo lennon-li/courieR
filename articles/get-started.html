@@ -80,9 +80,10 @@
     
     
 <p>courieR syncs installed R packages between R versions on the same
-machine. You can migrate from an old version to a new one, keep two
-versions in parity, or selectively push packages in either direction —
-all from the R console or from a point-and-click dashboard.</p>
+machine. You can migrate from an old version to a new one, or
+selectively push packages from a source installation into a target
+installation — all from the R console or from a point-and-click
+dashboard.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -297,6 +298,75 @@ CRAN packages are reinstalled from CRAN; GitHub packages become
 </div>
 </div>
 <div class="section level2">
+<h2 id="transfer-modes">Transfer modes<a class="anchor" aria-label="anchor" href="#transfer-modes"></a>
+</h2>
+<p><code><a href="../reference/ship.html">ship()</a></code> (and the dashboard’s <strong>Transfer
+mode</strong> selector) offers three mutually-exclusive ways to move
+packages. Pass one via <code>mode =</code>:</p>
+<table class="table">
+<colgroup>
+<col width="18%">
+<col width="42%">
+<col width="39%">
+</colgroup>
+<thead><tr class="header">
+<th>Mode</th>
+<th>What it does</th>
+<th>When to use</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>
+<code>"online"</code> (default)</td>
+<td>Reinstall each package fresh via pak — latest compatible version,
+dependencies resolved. Pure-R and local packages are <em>copied</em>
+directly (no rebuild); only compiled packages are reinstalled,
+preferring pre-built binaries.</td>
+<td>Moving between <strong>different</strong> R versions, where compiled
+packages must be rebuilt for the new R.</td>
+</tr>
+<tr class="even">
+<td><code>"offline"</code></td>
+<td>Copy package files directly from the source library — fast, no
+internet, exact same versions.</td>
+<td>Same R <strong>x.y</strong> series, or air-gapped machines.</td>
+</tr>
+<tr class="odd">
+<td><code>"preserve"</code></td>
+<td>Same direct copy as <code>offline</code>, but anything that can’t be
+copied is reinstalled via pak at its exact source version.</td>
+<td>Same series, when you want a network safety net.</td>
+</tr>
+</tbody>
+</table>
+<div class="section level3">
+<h3 id="why-copy-modes-need-the-same-r-x-y-series">Why copy modes need the same R x.y series<a class="anchor" aria-label="anchor" href="#why-copy-modes-need-the-same-r-x-y-series"></a>
+</h3>
+<p>A package’s <strong>compiled code</strong> (the
+<code>.dll</code>/<code>.so</code> files under <code>libs/</code>) is
+built against a specific R <strong>minor</strong> version’s binary
+interface. Packages compiled for R 4.5.x will not reliably load under R
+4.6 — they must be rebuilt. So:</p>
+<ul>
+<li>
+<strong>Within the same series</strong> (e.g. 4.5.0 ↔︎ 4.5.2) copying
+is binary-safe, and <code>offline</code>/<code>preserve</code> are the
+fast choice.</li>
+<li>
+<strong>Across minor versions</strong> (e.g. 4.5 → 4.6) compiled
+packages must be reinstalled, so only <code>online</code> is safe. The
+dashboard hides the copy modes for such pairs automatically.</li>
+</ul>
+<p>Pure-R packages (no <code>libs/</code>) are version-independent, so
+<code>online</code> copies those directly even across versions and only
+rebuilds the compiled minority.</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># explicit mode</span></span>
+<span><span class="fu"><a href="../reference/ship.html">ship</a></span><span class="op">(</span>source_path <span class="op">=</span> <span class="va">old_r</span>, target_path <span class="op">=</span> <span class="va">new_r</span>, mode <span class="op">=</span> <span class="st">"offline"</span><span class="op">)</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level2">
 <h2 id="common-recipes">Common Recipes<a class="anchor" aria-label="anchor" href="#common-recipes"></a>
 </h2>
 <div class="section level3">
@@ -305,7 +375,7 @@ CRAN packages are reinstalled from CRAN; GitHub packages become
 <p>The shortest path uses <code><a href="../reference/migrate.html">migrate()</a></code>, which looks up
 installations by version string so you don’t need to handle paths
 yourself:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://lennon-li.github.io/courieR/">courieR</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># dry run first</span></span>
@@ -316,7 +386,7 @@ yourself:</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">status</span><span class="op">)</span></span></code></pre></div>
 <p>For more control — filtering by package, custom paths, or progress
 callbacks — use <code><a href="../reference/ship.html">ship()</a></code> directly:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">routes</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/find_routes.html">find_routes</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">old_r</span>   <span class="op">&lt;-</span> <span class="va">routes</span><span class="op">$</span><span class="va">rscript_path</span><span class="op">[</span><span class="op">!</span><span class="va">routes</span><span class="op">$</span><span class="va">is_current</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span><span class="va">new_r</span>   <span class="op">&lt;-</span> <span class="va">routes</span><span class="op">$</span><span class="va">rscript_path</span><span class="op">[</span><span class="va">routes</span><span class="op">$</span><span class="va">is_current</span><span class="op">]</span></span>
@@ -324,22 +394,26 @@ callbacks — use <code><a href="../reference/ship.html">ship()</a></code> direc
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ship.html">ship</a></span><span class="op">(</span>source_path <span class="op">=</span> <span class="va">old_r</span>, target_path <span class="op">=</span> <span class="va">new_r</span>, upgrade <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
-<h3 id="two-way-sync-keep-two-r-versions-in-parity">Two-way sync (keep two R versions in parity)<a class="anchor" aria-label="anchor" href="#two-way-sync-keep-two-r-versions-in-parity"></a>
+<h3 id="mirror-two-same-version-installs">Mirror two same-version installs<a class="anchor" aria-label="anchor" href="#mirror-two-same-version-installs"></a>
 </h3>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<p><code><a href="../reference/ship.html">ship()</a></code> always moves packages one way, from
+<code>source_path</code> into <code>target_path</code>. To bring two
+same-version installations into line with each other, run it twice,
+swapping the roles:</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">r_a</span> <span class="op">&lt;-</span> <span class="va">routes</span><span class="op">$</span><span class="va">rscript_path</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span><span class="va">r_b</span> <span class="op">&lt;-</span> <span class="va">routes</span><span class="op">$</span><span class="va">rscript_path</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span></span>
 <span></span>
-<span><span class="co"># push everything A has to B</span></span>
+<span><span class="co"># push everything A has into B</span></span>
 <span><span class="fu"><a href="../reference/ship.html">ship</a></span><span class="op">(</span>source_path <span class="op">=</span> <span class="va">r_a</span>, target_path <span class="op">=</span> <span class="va">r_b</span>, upgrade <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># push everything B has to A</span></span>
+<span><span class="co"># then push everything B has into A</span></span>
 <span><span class="fu"><a href="../reference/ship.html">ship</a></span><span class="op">(</span>source_path <span class="op">=</span> <span class="va">r_b</span>, target_path <span class="op">=</span> <span class="va">r_a</span>, upgrade <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="inspect-before-migrating">Inspect before migrating<a class="anchor" aria-label="anchor" href="#inspect-before-migrating"></a>
 </h3>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">src</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/manifest.html">manifest</a></span><span class="op">(</span>rscript_path <span class="op">=</span> <span class="va">old_r</span><span class="op">)</span></span>
 <span><span class="va">tgt</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/manifest.html">manifest</a></span><span class="op">(</span>rscript_path <span class="op">=</span> <span class="va">new_r</span><span class="op">)</span></span>
 <span><span class="va">comp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inventory.html">inventory</a></span><span class="op">(</span><span class="va">src</span>, <span class="va">tgt</span><span class="op">)</span></span>
@@ -351,11 +425,11 @@ callbacks — use <code><a href="../reference/ship.html">ship()</a></code> direc
 <div class="section level3">
 <h3 id="save-a-manifest-to-disk">Save a manifest to disk<a class="anchor" aria-label="anchor" href="#save-a-manifest-to-disk"></a>
 </h3>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pkgs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/manifest.html">manifest</a></span><span class="op">(</span>rscript_path <span class="op">=</span> <span class="va">routes</span><span class="op">$</span><span class="va">rscript_path</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">pkgs</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"package"</span>, <span class="st">"version"</span>, <span class="st">"source"</span><span class="op">)</span><span class="op">]</span>, <span class="st">"my_packages.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>Restore from a saved manifest on a new machine:</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">saved</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span><span class="st">"my_packages.csv"</span>, stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="co"># pak installs from a character vector of package names</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pkg_install.html" class="external-link">pkg_install</a></span><span class="op">(</span><span class="va">saved</span><span class="op">$</span><span class="va">package</span><span class="op">)</span></span></code></pre></div>
@@ -367,31 +441,26 @@ callbacks — use <code><a href="../reference/ship.html">ship()</a></code> direc
 </h2>
 <p><code><a href="../reference/open_hub.html">hub()</a></code> launches a Shiny dashboard that wraps the same
 pipeline:</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://lennon-li.github.io/courieR/">courieR</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/open_hub.html">hub</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<!-- NOTE: this screenshot predates the source/target rename (it shows the old
+     "first/second installation" pickers and the removed sync-direction selector).
+     A human should refresh figures/sync-tab.png to match the current UI. -->
 <p><strong>Workflow:</strong></p>
 <ol style="list-style-type: decimal">
 <li>The dashboard scans all R installations on the machine automatically
 — no configuration needed.</li>
-<li>Select two installations from the sidebar dropdowns (labelled A and
-B).</li>
+<li>Select a <strong>source</strong> and a <strong>target</strong>
+installation from the sidebar dropdowns. The target list is constrained
+to the same-or-newer R version than the source, since an older R can’t
+reliably hold packages built for a newer one.</li>
 <li>Click <strong>Compare</strong> — a summary strip shows counts of
 identical, missing, and version-mismatched packages. The table lists
 differences first.</li>
-<li>Click a sync button:
-<ul>
-<li>
-<strong>Copy A → B</strong> — installs or upgrades packages from A
-into B</li>
-<li>
-<strong>Copy B → A</strong> — installs or upgrades packages from B
-into A</li>
-<li>
-<strong>Two-Way Sync</strong> — brings both installations to parity
-in both directions</li>
-</ul>
-</li>
+<li>Click <strong>Ship</strong> to install or upgrade the source’s
+packages into the target. To mirror two same-version installs, run the
+transfer again with source and target swapped.</li>
 <li>A confirmation dialog shows the package count and an estimated time.
 Confirm to start.</li>
 <li>The log pane shows real-time progress: each package, its pak spec,

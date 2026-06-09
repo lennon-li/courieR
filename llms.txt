@@ -1,8 +1,8 @@
 # courieR
 
 courieR syncs installed R packages between R versions on the same
-machine — migrate from old to new, keep multiple versions in parity, or
-selectively copy packages in either direction. No manual reinstalling,
+machine — migrate from old to new, or selectively copy packages from a
+source installation into a target installation. No manual reinstalling,
 no lost libraries.
 
 ## Installation
@@ -30,8 +30,9 @@ in a header bar, and lets you compare and sync packages between any two.
 ## How It Works
 
 courieR detects every R installation on your system, scans their package
-libraries, and lets you push packages between them — one-way or
-bidirectionally — using [pak](https://pak.r-lib.org/) under the hood.
+libraries, and lets you push packages from a source installation into a
+target installation — using [pak](https://pak.r-lib.org/) under the
+hood.
 
     R 4.4.1  ──▶  compare()  ──▶  missing / outdated packages found
                               ──▶  ship() installs or upgrades into target R
@@ -64,23 +65,24 @@ of whether admin rights were used:
 The **Sync** tab is the main workflow:
 
 1.  The header bar shows all detected installations (highlighted in the
-    A/B accent colours once selected)
-2.  Select two R installations from the dropdowns in the sidebar
+    source/target accent colours once selected)
+2.  Select a **source** and a **target** R installation from the
+    dropdowns in the sidebar. The target list is constrained to the
+    same-or-newer R version than the source, since an older R can’t
+    reliably hold packages built for a newer one.
 3.  Click **Compare** — a summary strip shows counts of identical,
     missing, and version-mismatched packages
-4.  Click one of three sync buttons:
-    - **Copy A → B** — installs or upgrades packages from A into B
-    - **Copy B → A** — installs or upgrades packages from B into A
-    - **Two-Way Sync** — brings both installations to parity in both
-      directions
+4.  Click **Ship** — installs or upgrades the source’s packages into the
+    target. To mirror two same-version installs, run the transfer again
+    with source and target swapped.
 
 The comparison table lists unmatched and outdated packages first, ahead
 of packages that already match. Before a sync starts, the confirmation
 dialog shows an approximate time range based on the number of packages.
 During sync, the dashboard shows progress details and a log of the
-direction, package list, completion state, and any failures. When sync
-finishes, courieR rescans both selected installations and refreshes the
-comparison automatically.
+package list, completion state, and any failures. When sync finishes,
+courieR rescans both selected installations and refreshes the comparison
+automatically.
 
 ## CLI Usage
 
