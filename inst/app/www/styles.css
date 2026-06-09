@@ -851,13 +851,57 @@ body {
 
 .sidebar-install-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.15rem;
   padding: 0.28rem 0.55rem;
   border-radius: 8px;
   margin-bottom: 0.2rem;
   background: #f5f8fb;
   border: 1px solid #e0eaf2;
+}
+
+.sidebar-install-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.sidebar-install-current {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #2f7d4f;
+  background: #e3f5ea;
+  border-radius: 5px;
+  padding: 0.02rem 0.3rem;
+}
+
+.sidebar-install-lib {
+  font-size: 0.66rem;
+  color: #6d879b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+  line-height: 1.25;
+}
+
+.sidebar-install-lib-prefix {
+  font-family: inherit;
+  color: #9aabba;
+  font-weight: 600;
+}
+
+.sidebar-install-lib-shared {
+  color: #b5762a;
+}
+
+.sidebar-installs-warn {
+  font-size: 0.7rem;
+  color: #b5762a;
+  font-weight: 600;
+  margin-top: 0.35rem;
+  line-height: 1.3;
 }
 
 .sidebar-install-a {

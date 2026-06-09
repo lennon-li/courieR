@@ -715,26 +715,54 @@ mod_sync_server <- function(id,
       routes <- routes_data()
       if (nrow(routes) == 0) return(NULL)
 
-      sel_a <- input$install_a
-      sel_b <- input$install_b
+      sel_a   <- input$install_a
+      sel_b   <- input$install_b
+      has_lib <- "library" %in% names(routes)
+
+      # Libraries shared by more than one install (same package store).
+      shared_libs <- character(0)
+      if (has_lib) {
+        libs <- routes$library
+        ok   <- !is.na(libs) & nzchar(libs)
+        shared_libs <- unique(libs[ok][duplicated(libs[ok])])
+      }
 
       tags$div(
         class = "sidebar-installs",
         tags$div(class = "sidebar-installs-label", "Installations found:"),
         lapply(seq_len(nrow(routes)), function(i) {
           path <- routes$rscript_path[[i]]
+          lib  <- if (has_lib) routes$library[[i]] else NA_character_
           bucket <- if (!is.null(sel_a) && identical(path, sel_a)) "a"
                     else if (!is.null(sel_b) && identical(path, sel_b)) "b"
                     else ""
           extra_cls <- if (nzchar(bucket)) paste0("sidebar-install-", bucket) else ""
+          is_shared <- !is.na(lib) && nzchar(lib) && lib %in% shared_libs
           tags$div(
             class = paste("sidebar-install-row", extra_cls),
-            tags$span(class = "sidebar-install-version",
-              sprintf("R %s", routes$version[[i]])),
-            tags$span(class = "sidebar-install-loc",
-              route_location(path))
+            tags$div(
+              class = "sidebar-install-head",
+              tags$span(class = "sidebar-install-version",
+                sprintf("R %s", routes$version[[i]])),
+              tags$span(class = "sidebar-install-loc", route_location(path)),
+              if (isTRUE(routes$is_current[[i]]))
+                tags$span(class = "sidebar-install-current", "current")
+            ),
+            tags$div(
+              class = paste("sidebar-install-lib",
+                            if (is_shared) "sidebar-install-lib-shared" else ""),
+              title = if (!is.na(lib) && nzchar(lib)) lib else "library unknown",
+              tags$span(class = "sidebar-install-lib-prefix", "lib: "),
+              if (!is.na(lib) && nzchar(lib)) lib else "unknown"
+            )
           )
-        })
+        }),
+        if (length(shared_libs) > 0)
+          tags$div(class = "sidebar-installs-warn",
+            "⚠ Some installs share a library (same packages) and can't ship to each other."),
+        if (nrow(routes) < 2)
+          tags$div(class = "sidebar-installs-warn",
+            "Only one R installation found — shipping needs a second, different one.")
       )
     })
 
@@ -885,18 +913,29 @@ mod_sync_server <- function(id,
       updateSelectInput(session, "install_b", choices = choices, selected = sel)
     })
 
-    # Hint shown under the target dropdown when the chosen source is the newest
-    # installation, so there is nowhere same-or-newer to ship into.
+    # Hint shown under the target dropdown when no eligible target exists. The
+    # message distinguishes "there's only one R" from "others exist but were all
+    # filtered out", so the user isn't told phantom installations were excluded.
     output$install_b_target_hint <- renderUI({
-      src <- input$install_a
-      if (is.null(src) || !nzchar(src) || nrow(routes_data()) == 0) return(NULL)
+      src    <- input$install_a
+      routes <- routes_data()
+      if (is.null(src) || !nzchar(src) || nrow(routes) == 0) return(NULL)
       if (nrow(valid_targets(src)) > 0) return(NULL)
-      tags$div(
-        class = "sync-target-hint",
-        "No eligible target: every other installation is either an older R, or ",
-        "shares this source's package library (shipping there would change nothing). ",
-        "Packages only transfer to an equal-or-newer R with a different library."
-      )
+
+      n_other <- nrow(routes) - 1L  # installs other than the source
+      msg <- if (n_other <= 0L) {
+        paste0("Only one R installation was detected, so there is no second ",
+               "installation to ship into. Shipping needs a source and a ",
+               "different target. See “Installations found” above.")
+      } else {
+        sprintf(paste0("None of the other %d installation(s) is eligible: each ",
+                       "is either an older R, or shares this source's package ",
+                       "library (shipping there would change nothing). Packages ",
+                       "only transfer to an equal-or-newer R with a different ",
+                       "library — compare the library paths under ",
+                       "“Installations found” above."), n_other)
+      }
+      tags$div(class = "sync-target-hint", msg)
     })
 
     # Direction is fixed source → target; expose the constant for shared modules.

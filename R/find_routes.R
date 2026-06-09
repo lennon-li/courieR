@@ -218,16 +218,26 @@ find_routes <- function(search_paths = NULL) {
   candidates <- unique(as.character(candidates))
   candidates <- candidates[fs::file_exists(candidates)]
 
+  # Clean environment for the probe processes, inherited from the current one
+  # but with two corrections:
+  #   * R_LIBS_USER / R_LIBS_SITE / R_LIBS are stripped. R always sets
+  #     R_LIBS_USER in its session environment; if a probed child R inherited
+  #     it, the child would report the PARENT's library via .libPaths() instead
+  #     of its own, making every detected installation appear to share one
+  #     library. Removing them lets each child compute its own default library.
+  #   * R_HOME is blanked so sub-R processes (e.g. rig-installed versions) do
+  #     not see the parent's R_HOME and emit "WARNING: ignoring environment
+  #     value of R_HOME" on stdout, which would corrupt the parsed output.
+  probe_env <- Sys.getenv()
+  probe_env <- probe_env[!names(probe_env) %in% c("R_LIBS_USER", "R_LIBS_SITE", "R_LIBS")]
+  probe_env["R_HOME"] <- ""
+
   res_list <- lapply(candidates, function(rscript) {
     script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
     out <- tryCatch(
-      # Pass R_HOME="" so sub-R processes (e.g. rig-installed versions) do not
-      # see the parent's R_HOME and emit "WARNING: ignoring environment value
-      # of R_HOME" to stdout, which would corrupt the parsed output.
-      # "current" inherits all other env vars; the named R_HOME="" overrides it.
       processx::run(
         rscript, c("--vanilla", "-e", script),
-        env    = c(R_HOME = "", "current"),
+        env    = probe_env,
         timeout = 3,
         error_on_status = FALSE
       ),
