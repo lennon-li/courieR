@@ -4,9 +4,10 @@ test_that("find_routes runs without error", {
 
 })
 
-test_that("find_routes reports a library column", {
+test_that("find_routes reports home and library columns", {
   res <- find_routes()
-  expect_true(all(c("version", "rscript_path", "library", "is_current") %in% names(res)))
+  expect_true(all(c("version", "rscript_path", "home", "library", "is_current") %in% names(res)))
+  expect_type(res$home, "character")
   expect_type(res$library, "character")
 })
 

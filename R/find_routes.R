@@ -13,6 +13,8 @@
 #'   \describe{
 #'     \item{version}{Character. R version string, e.g. `"4.4.1"`.}
 #'     \item{rscript_path}{Character. Absolute path to the `Rscript` executable.}
+#'     \item{home}{Character. The installation directory (`R.home()`), i.e. where
+#'       this R is installed. Normalized lexically for comparison.}
 #'     \item{library}{Character. The installation's primary library location
 #'       (`.libPaths()[1]` under a vanilla session) — where `install.packages()`
 #'       writes by default. This is the effective package store; two installs
@@ -233,7 +235,7 @@ find_routes <- function(search_paths = NULL) {
   probe_env["R_HOME"] <- ""
 
   res_list <- lapply(candidates, function(rscript) {
-    script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
+    script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", R.home(), "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
     out <- tryCatch(
       processx::run(
         rscript, c("--vanilla", "-e", script),
@@ -247,25 +249,28 @@ find_routes <- function(search_paths = NULL) {
     if (is.null(out) || out$status != 0 || out$timeout) return(NULL)
 
     parts <- strsplit(trimws(out$stdout), "\\|\\|SEP\\|\\|")[[1]]
-    if (length(parts) < 3) return(NULL)
+    if (length(parts) < 4) return(NULL)
 
     # Strip any leading non-numeric content (e.g. stray WARNING lines) from
     # the major/minor parts before assembling the version string.
     major <- sub(".*?(\\d+)\\s*$", "\\1", trimws(parts[1]))
     minor <- trimws(parts[2])
 
-    # parts[3] holds the install's .libPaths() joined by ||LIB||. The first
-    # entry is the effective install target (where install.packages() writes).
-    # Normalize lexically so the same library reached from two installs compares
-    # equal; path_norm does not touch the filesystem, so it is safe even when the
-    # (user) library directory does not exist yet.
-    libs <- strsplit(parts[3], "\\|\\|LIB\\|\\|")[[1]]
+    # parts[3] = R.home() (the installation directory). parts[4] = the install's
+    # .libPaths() joined by ||LIB||; its first entry is the effective install
+    # target (where install.packages() writes). Normalize both lexically so the
+    # same path reached from two installs compares equal; path_norm does not touch
+    # the filesystem, so it is safe even when the directory does not exist yet.
+    home <- as.character(fs::path_norm(trimws(parts[3])))
+
+    libs <- strsplit(parts[4], "\\|\\|LIB\\|\\|")[[1]]
     libs <- trimws(libs[nzchar(trimws(libs))])
     primary_lib <- if (length(libs) >= 1) as.character(fs::path_norm(libs[1])) else NA_character_
 
     list(
       version      = paste(major, minor, sep = "."),
       rscript_path = rscript,
+      home         = home,
       library      = primary_lib,
       is_current   = FALSE
     )
@@ -275,8 +280,8 @@ find_routes <- function(search_paths = NULL) {
 
   if (length(res_list) == 0) {
     return(data.frame(
-      version = character(), rscript_path = character(), library = character(),
-      is_current = logical(),
+      version = character(), rscript_path = character(), home = character(),
+      library = character(), is_current = logical(),
       stringsAsFactors = FALSE
     ))
   }

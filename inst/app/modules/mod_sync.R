@@ -30,9 +30,9 @@ mod_sync_ui <- function(id) {
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
+      width = 380,
       uiOutput(ns("detecting_msg")),
       uiOutput(ns("detected_installs")),
-      hr(),
       div(
         class = "sync-select-block sync-select-block-a",
         tags$div(class = "sync-select-label", "Select source installation"),
@@ -48,7 +48,6 @@ mod_sync_ui <- function(id) {
       ),
       actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn",
         onclick = "this.disabled=true; if(window.courierStartTimer) window.courierStartTimer();"),
-      hr(),
       div(
         class = "sync-select-block",
         tags$div(class = "sync-select-label sync-label-row",
@@ -738,6 +737,7 @@ mod_sync_server <- function(id,
                     else ""
           extra_cls <- if (nzchar(bucket)) paste0("sidebar-install-", bucket) else ""
           is_shared <- !is.na(lib) && nzchar(lib) && lib %in% shared_libs
+          home <- if ("home" %in% names(routes)) routes$home[[i]] else NA_character_
           tags$div(
             class = paste("sidebar-install-row", extra_cls),
             tags$div(
@@ -749,10 +749,16 @@ mod_sync_server <- function(id,
                 tags$span(class = "sidebar-install-current", "current")
             ),
             tags$div(
+              class = "sidebar-install-path",
+              title = if (!is.na(home) && nzchar(home)) home else "install location unknown",
+              tags$span(class = "sidebar-install-lib-prefix", "install: "),
+              if (!is.na(home) && nzchar(home)) home else "unknown"
+            ),
+            tags$div(
               class = paste("sidebar-install-lib",
                             if (is_shared) "sidebar-install-lib-shared" else ""),
               title = if (!is.na(lib) && nzchar(lib)) lib else "library unknown",
-              tags$span(class = "sidebar-install-lib-prefix", "lib: "),
+              tags$span(class = "sidebar-install-lib-prefix", "library: "),
               if (!is.na(lib) && nzchar(lib)) lib else "unknown"
             )
           )

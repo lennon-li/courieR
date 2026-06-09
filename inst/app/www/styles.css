@@ -379,7 +379,14 @@ body {
 }
 
 .sync-select-block {
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.45rem;
+}
+
+/* Sections are separated by spacing alone (no divider rules); keep the gap
+   between sidebar children tight now that the hr() separators are gone. */
+.sync-sidebar > .sidebar-content,
+.sync-sidebar .sidebar-content {
+  gap: 0.5rem;
 }
 
 .sync-select-label {
@@ -878,7 +885,8 @@ body {
   padding: 0.02rem 0.3rem;
 }
 
-.sidebar-install-lib {
+.sidebar-install-lib,
+.sidebar-install-path {
   font-size: 0.66rem;
   color: #6d879b;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

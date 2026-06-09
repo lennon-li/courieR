@@ -18,6 +18,8 @@ following columns:
 \describe{
 \item{version}{Character. R version string, e.g. \code{"4.4.1"}.}
 \item{rscript_path}{Character. Absolute path to the \code{Rscript} executable.}
+\item{home}{Character. The installation directory (\code{R.home()}), i.e. where
+this R is installed. Normalized lexically for comparison.}
 \item{library}{Character. The installation's primary library location
 (\code{.libPaths()[1]} under a vanilla session) — where \code{install.packages()}
 writes by default. This is the effective package store; two installs
