@@ -80,6 +80,13 @@ following columns:</p><dl><dt>version</dt>
 <dt>rscript_path</dt>
 <dd><p>Character. Absolute path to the <code>Rscript</code> executable.</p></dd>
 
+<dt>library</dt>
+<dd><p>Character. The installation's primary library location
+(<code>.libPaths()[1]</code> under a vanilla session) — where <code><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages()</a></code>
+writes by default. This is the effective package store; two installs
+that share a <code>library</code> hold the same packages. Normalized lexically for
+comparison. <code>NA</code> if it could not be determined.</p></dd>
+
 <dt>is_current</dt>
 <dd><p>Logical. <code>TRUE</code> for the R session running courieR.</p></dd>
 

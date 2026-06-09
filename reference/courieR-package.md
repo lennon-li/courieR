@@ -5,7 +5,7 @@ installed R packages between them. Provides find_routes() to discover R
 versions, manifest() to scan package libraries via 'subprocess',
 inventory() to compare two libraries, and ship() to install packages
 into a target R version using 'pak'. Includes a Shiny dashboard
-(open_hub()) for interactive one-way and two-way migration.
+(open_hub()) for interactive source-to-target migration.
 
 ## See also
 

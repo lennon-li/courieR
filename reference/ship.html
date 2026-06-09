@@ -65,6 +65,8 @@ or outdated packages into the target.</p>
 <span>  upgrade <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  log_callback <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"online"</span>, <span class="st">"offline"</span>, <span class="st">"preserve"</span><span class="op">)</span>,</span>
+<span>  source_pkgs <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  target_pkgs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -114,6 +116,13 @@ during package transfer.</p></dd>
 <code>"offline"</code> copies package directories by file and skips packages without
 a valid source path, and <code>"preserve"</code> copies first then falls back to a
 pinned pak spec for packages that could not be copied.</p></dd>
+
+
+<dt id="arg-source-pkgs-target-pkgs">source_pkgs, target_pkgs<a class="anchor" aria-label="anchor" href="#arg-source-pkgs-target-pkgs"></a></dt>
+<dd><p>Optional pre-scanned manifests (as returned by
+<code><a href="manifest.html">manifest()</a></code>) for the source and target installations. When supplied, the
+corresponding <code><a href="manifest.html">manifest()</a></code> subprocess scan is skipped, avoiding redundant
+library scans when the caller has already scanned both installations.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

@@ -14,6 +14,8 @@ ship(
   upgrade = FALSE,
   log_callback = NULL,
   mode = c("online", "offline", "preserve"),
+  source_pkgs = NULL,
+  target_pkgs = NULL,
   ...
 )
 ```
@@ -63,6 +65,16 @@ ship(
   copies package directories by file and skips packages without a valid
   source path, and `"preserve"` copies first then falls back to a pinned
   pak spec for packages that could not be copied.
+
+- source_pkgs, target_pkgs:
+
+  Optional pre-scanned manifests (as returned by
+  [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md))
+  for the source and target installations. When supplied, the
+  corresponding
+  [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md)
+  subprocess scan is skipped, avoiding redundant library scans when the
+  caller has already scanned both installations.
 
 - ...:
 

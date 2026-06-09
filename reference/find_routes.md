@@ -31,6 +31,15 @@ columns:
 
   Character. Absolute path to the `Rscript` executable.
 
+- library:
+
+  Character. The installation's primary library location
+  (`.libPaths()[1]` under a vanilla session) — where
+  [`install.packages()`](https://rdrr.io/r/utils/install.packages.html)
+  writes by default. This is the effective package store; two installs
+  that share a `library` hold the same packages. Normalized lexically
+  for comparison. `NA` if it could not be determined.
+
 - is_current:
 
   Logical. `TRUE` for the R session running courieR.
