@@ -1,5 +1,18 @@
 ui <- bslib::page_navbar(
-  title = NULL,
+  title = div(
+    class = "app-brand",
+    div(
+      class = "app-brand-mark",
+      tags$div(
+        class = "app-logo-wrap",
+        tags$img(src = "logo.png", height = "84px",
+                 style = "vertical-align: middle; background: transparent;")
+      ),
+      tags$div(class = "app-version",
+               sprintf("v%s  ·  loaded %s", utils::packageVersion("courieR"),
+                       format(Sys.time(), "%Y-%m-%d %H:%M")))
+    )
+  ),
   window_title = "courieR",
   theme = bslib::bs_theme(version = 5, preset = "shiny"),
   header = tagList(

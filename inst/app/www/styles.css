@@ -356,14 +356,6 @@ body {
   border-right: 1px solid #ebf1f6;
 }
 
-.sync-sidebar-logo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.6rem 0 0.2rem;
-  margin-bottom: 0.4rem;
-}
-
 .sync-sidebar select.form-control {
   min-height: 46px;
   border: 1.5px solid #aac4d8 !important;

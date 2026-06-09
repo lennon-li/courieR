@@ -30,16 +30,6 @@ mod_sync_ui <- function(id) {
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
-      div(
-        class = "app-brand-mark sync-sidebar-logo",
-        tags$div(
-          class = "app-logo-wrap",
-          tags$img(src = "logo.png", height = "64px",
-                   style = "vertical-align: middle; background: transparent;")
-        ),
-        tags$div(class = "app-version",
-                 sprintf("v%s", utils::packageVersion("courieR")))
-      ),
       uiOutput(ns("detecting_msg")),
       uiOutput(ns("detected_installs")),
       hr(),
