@@ -96,6 +96,11 @@ find_target_lib <- function(target_path) {
       "if (!requireNamespace('pak', quietly = TRUE)) {",
       "  stop('Package pak is not installed in the target R installation.', call. = FALSE)",
       "}",
+      # Prefer pre-built binaries over compiling from source. On Windows/macOS R
+      # already prefers binaries; pointing CRAN at Posit Package Manager extends
+      # binary coverage (incl. Linux and pinned versions) and never forces source.
+      "options(repos = c(CRAN = 'https://packagemanager.posit.co/cran/latest'))",
+      "if (.Platform$pkgType != 'source') options(pkgType = 'both')",
       "pak::pkg_install(",
       "  install_args$specs,",
       "  lib = install_args$lib,",
@@ -105,12 +110,23 @@ find_target_lib <- function(target_path) {
     ), install_script_file)
 
     emit_log("Running pak in the target R installation; first-time metadata loading may take 1-2 minutes.")
+    emit_log("Live pak output streams to this R console; the summary returns to the dashboard when it finishes.")
+    # Stream pak's verbose, line-by-line output to the host R console only.
+    #
+    # Do NOT route this through `log_callback`: pak's metadata/resolve phase
+    # emits thousands of lines, and when `log_callback` drives a live Shiny UI
+    # (appending a reactive value and firing a DOM update per line) those
+    # updates are issued from *inside* this processx polling loop. Pushing that
+    # volume of UI traffic from within the blocking subprocess loop can
+    # destabilise and abort the host R session. The full output is still
+    # captured in `res$stdout`/`res$stderr` for the failure message below, and
+    # the milestone/summary messages around this call still reach the UI.
     res <- processx::run(
       target_path,
       c("--vanilla", install_script_file, install_args_file),
       error_on_status = FALSE,
-      stdout_line_callback = function(line, proc) emit_log(line),
-      stderr_line_callback = function(line, proc) emit_log(line)
+      stdout_line_callback = function(line, proc) cat(line, "\n", sep = ""),
+      stderr_line_callback = function(line, proc) cat(line, "\n", sep = "", file = stderr())
     )
     if (res$status == 0) {
       emit_log("pak subprocess finished successfully.")
@@ -161,6 +177,10 @@ find_target_lib <- function(target_path) {
 #'   `"offline"` copies package directories by file and skips packages without
 #'   a valid source path, and `"preserve"` copies first then falls back to a
 #'   pinned pak spec for packages that could not be copied.
+#' @param source_pkgs,target_pkgs Optional pre-scanned manifests (as returned by
+#'   [manifest()]) for the source and target installations. When supplied, the
+#'   corresponding [manifest()] subprocess scan is skipped, avoiding redundant
+#'   library scans when the caller has already scanned both installations.
 #' @param ... Reserved for future arguments.
 #' @return A named list with the following elements:
 #'   \describe{
@@ -196,7 +216,8 @@ find_target_lib <- function(target_path) {
 #' }
 #' @export
 ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upgrade = FALSE,
-                 log_callback = NULL, mode = c("online", "offline", "preserve"), ...) {
+                 log_callback = NULL, mode = c("online", "offline", "preserve"),
+                 source_pkgs = NULL, target_pkgs = NULL, ...) {
   start_time <- Sys.time()
   valid_modes <- c("online", "offline", "preserve")
   if (length(mode) > 1L) mode <- mode[[1L]]
@@ -211,8 +232,11 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   if (!fs::file_exists(source_path)) cli::cli_abort("Source Rscript not found")
   if (!fs::file_exists(target_path)) cli::cli_abort("Target Rscript not found")
 
-  src_pkgs <- manifest(rscript_path = source_path, format = "data.table")
-  tgt_pkgs <- manifest(rscript_path = target_path, format = "data.table")
+  # `source_pkgs`/`target_pkgs` let a caller pass pre-scanned manifests (e.g. the
+  # dashboard, which already scanned both libraries for the comparison) so we
+  # skip re-spawning subprocesses here.
+  src_pkgs <- if (is.null(source_pkgs)) manifest(rscript_path = source_path, format = "data.table") else data.table::as.data.table(source_pkgs)
+  tgt_pkgs <- if (is.null(target_pkgs)) manifest(rscript_path = target_path, format = "data.table") else data.table::as.data.table(target_pkgs)
 
   comp <- inventory(src_pkgs, tgt_pkgs)
 
@@ -239,10 +263,14 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
       rep(NA_character_, nrow(plan))
     }
 
+    # online mode: let pak resolve compatible versions — pinning old exact
+    # versions from a different R installation causes the solver to fail.
+    # Must use a list of NULLs (not NA_character_) so wrap() sees is.null(version) == TRUE.
+    version_for_spec <- if (mode == "online") vector("list", nrow(plan)) else plan$version.x
     plan$pak_spec <- mapply(
       wrap,
       package     = plan$package,
-      version     = plan$version.x,
+      version     = version_for_spec,
       source_hint = plan$source,
       github_ref  = github_refs,
       SIMPLIFY    = TRUE
@@ -267,14 +295,52 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
 
   if (mode == "online") {
     target_lib <- find_target_lib(target_path)
-    pak_results <- .run_pak_plan(plan, target_path, target_lib = target_lib, upgrade = upgrade, log_callback = log_callback)
-    pak_error <- attr(pak_results, "pak_error")
+
+    # Avoid recompiling/redownloading wherever it is safe:
+    #   * Pure-R packages (no compiled code) are ABI-independent — copy them
+    #     directly from the source library, even across R versions. No download,
+    #     no compile.
+    #   * Local/private packages (source "unknown") can't be fetched online —
+    #     copy them too (also keeps one un-findable package from poisoning pak's
+    #     atomic solve).
+    #   * Only packages that are BOTH resolvable online AND have compiled code
+    #     go through pak, which must rebuild them for the target R (binary
+    #     preferred — see .run_pak_plan).
+    plan_meta  <- .copy_plan(plan)
+    compiled   <- plan_meta$compiled[match(plan$package, plan_meta$package)]
+    compiled[is.na(compiled)] <- FALSE
+    resolvable <- !is.na(plan$source) & plan$source %in% c("CRAN", "Bioconductor", "GitHub")
+
+    needs_pak     <- resolvable & compiled
+    online_plan   <- plan[needs_pak, ]
+    copy_plan_all <- plan[!needs_pak, ]
+
+    if (nrow(copy_plan_all) > 0 && is.function(log_callback)) {
+      try(log_callback(sprintf(
+        "Copying %d package(s) directly from the source library (pure-R or local — no rebuild needed): %s",
+        nrow(copy_plan_all), paste(copy_plan_all$package, collapse = ", ")
+      )), silent = TRUE)
+    }
+    if (nrow(online_plan) > 0 && is.function(log_callback)) {
+      try(log_callback(sprintf(
+        "Reinstalling %d compiled package(s) via pak (binary preferred): %s",
+        nrow(online_plan), paste(online_plan$package, collapse = ", ")
+      )), silent = TRUE)
+    }
+
+    if (nrow(online_plan) > 0) {
+      pak_results <- .run_pak_plan(online_plan, target_path, target_lib = target_lib, upgrade = upgrade, log_callback = log_callback)
+      pak_error <- attr(pak_results, "pak_error")
+    } else {
+      pak_results <- data.table::data.table(package = character(), status = character(), message = character())
+      pak_error <- NULL
+    }
 
     tgt_pkgs_after <- manifest(rscript_path = target_path, format = "data.table")
 
-    results_list <- lapply(seq_len(nrow(plan)), function(i) {
-      pkg <- plan$package[i]
-      action <- plan$action[i]
+    results_list <- lapply(seq_len(nrow(online_plan)), function(i) {
+      pkg <- online_plan$package[i]
+      action <- online_plan$action[i]
       after_pkg <- tgt_pkgs_after[tgt_pkgs_after$package == pkg, ]
       pak_row <- pak_results[pak_results$package == pkg, ]
       pak_msg <- if (nrow(pak_row) > 0 && pak_row$status[[1]] == "error") pak_row$message[[1]] else NULL
@@ -287,7 +353,7 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
           list(package = pkg, status = "error", message = msg)
         }
       } else {
-        old_ver <- plan$version.y[i]
+        old_ver <- online_plan$version.y[i]
         after_ver <- if (nrow(after_pkg) > 0) after_pkg$version[1] else NA_character_
         if (!is.na(after_ver) && (is.na(old_ver) || after_ver != old_ver)) {
           list(package = pkg, status = "success", message = "Upgraded")
@@ -305,7 +371,16 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
         }
       }
     })
-    results <- data.table::rbindlist(results_list)
+
+    results <- if (length(results_list) > 0) data.table::rbindlist(results_list) else results
+
+    # Copy the pure-R / local packages directly from the source library.
+    if (nrow(copy_plan_all) > 0) {
+      plan_copy <- .copy_plan(copy_plan_all)
+      .warn_cross_major_compiled(plan_copy, source_path, target_path, log_callback = log_callback)
+      copy_res <- copy_packages(plan_copy, target_lib, log_callback = log_callback)
+      results <- data.table::rbindlist(list(results, copy_res), fill = TRUE)
+    }
   } else if (mode == "offline") {
     target_lib <- find_target_lib(target_path)
     plan_copy <- .copy_plan(plan)

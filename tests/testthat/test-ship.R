@@ -62,6 +62,10 @@ test_that("ship installs through target Rscript", {
   manifest_calls <- 0L
   process_calls <- list()
 
+  # pkgA has compiled code (a libs/ dir), so online mode reinstalls it via pak.
+  compiled_lib <- file.path(tempdir(), "courieR_test_pkgA")
+  dir.create(file.path(compiled_lib, "libs"), recursive = TRUE, showWarnings = FALSE)
+
   mockery::stub(ship, "fs::file_exists", function(...) TRUE)
   mockery::stub(ship, "manifest", function(...) {
     manifest_calls <<- manifest_calls + 1L
@@ -72,7 +76,7 @@ test_that("ship installs through target Rscript", {
   })
   mockery::stub(ship, "inventory", function(...) {
     list(
-      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN", libpath = compiled_lib),
       outdated = data.table::data.table(),
       comparison = data.table::data.table()
     )
@@ -117,6 +121,9 @@ test_that("ship calls log_callback before and after pak subprocess", {
   cb <- function(msg) calls <<- c(calls, msg)
   manifest_calls <- 0L
 
+  compiled_lib <- file.path(tempdir(), "courieR_test_logcb_pkgA")
+  dir.create(file.path(compiled_lib, "libs"), recursive = TRUE, showWarnings = FALSE)
+
   mockery::stub(ship, "fs::file_exists", function(...) TRUE)
   mockery::stub(ship, "manifest", function(...) {
     manifest_calls <<- manifest_calls + 1L
@@ -127,7 +134,7 @@ test_that("ship calls log_callback before and after pak subprocess", {
   })
   mockery::stub(ship, "inventory", function(...) {
     list(
-      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN", libpath = compiled_lib),
       outdated = data.table::data.table(),
       comparison = data.table::data.table()
     )
@@ -181,6 +188,84 @@ test_that("ship() plan has mode column", {
   result <- ship("dummy_src", "dummy_tgt", dry_run = TRUE, mode = "online")
   expect_true("mode" %in% names(result$plan))
   expect_true(all(result$plan$mode == "online"))
+})
+
+test_that("ship() online mode copies unknown-source packages instead of poisoning the pak batch", {
+  skip_if_not_installed("mockery")
+
+  manifest_calls <- 0L
+  pak_plan_seen <- NULL
+  copy_plan_seen <- NULL
+
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  mockery::stub(ship, "manifest", function(...) {
+    manifest_calls <<- manifest_calls + 1L
+    if (manifest_calls == 3L) {
+      return(data.table::data.table(package = "pkgCRAN", version = "1.0", source = "CRAN"))
+    }
+    data.table::data.table()
+  })
+  # pkgCRAN has compiled code -> reinstalled via pak; pkgLocal is unknown -> copied.
+  compiled_lib <- file.path(tempdir(), "courieR_test_pkgCRAN")
+  dir.create(file.path(compiled_lib, "libs"), recursive = TRUE, showWarnings = FALSE)
+
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(
+        package   = c("pkgCRAN", "pkgLocal"),
+        version.x = c("1.0", "0.0.0.9000"),
+        source    = c("CRAN", "unknown"),
+        libpath   = c(compiled_lib, NA_character_)
+      ),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "find_target_lib", function(...) tempdir())
+  mockery::stub(ship, ".run_pak_plan", function(plan, target_path, ...) {
+    pak_plan_seen <<- plan
+    data.table::data.table(package = plan$package, status = "success", message = "pak completed")
+  })
+  mockery::stub(ship, "copy_packages", function(plan, target_lib, ...) {
+    copy_plan_seen <<- plan
+    data.table::data.table(package = plan$package, status = "success", message = "copied")
+  })
+
+  res <- ship("dummy_src", "dummy_tgt", dry_run = FALSE, mode = "online")
+
+  # The unresolvable local package must NOT be in the pak solve.
+  expect_equal(pak_plan_seen$package, "pkgCRAN")
+  # It must be routed to a direct copy instead.
+  expect_true("pkgLocal" %in% copy_plan_seen$package)
+  # And reported in results as copied.
+  local_row <- res$results[res$results$package == "pkgLocal", ]
+  expect_equal(nrow(local_row), 1)
+  expect_equal(local_row$message, "copied")
+})
+
+test_that("ship() reuses provided manifests and skips scanning", {
+  skip_if_not_installed("mockery")
+
+  manifest_calls <- 0L
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  mockery::stub(ship, "manifest", function(...) {
+    manifest_calls <<- manifest_calls + 1L
+    data.table::data.table()
+  })
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(package = "pkgA", version.x = "1.0", source = "CRAN"),
+      outdated = data.table::data.table()
+    )
+  })
+
+  src <- data.table::data.table(package = "pkgA", version = "1.0", source = "CRAN")
+  tgt <- data.table::data.table()
+  res <- ship("dummy_src", "dummy_tgt", dry_run = TRUE, source_pkgs = src, target_pkgs = tgt)
+
+  # Both sides supplied -> no manifest() subprocess scans.
+  expect_equal(manifest_calls, 0L)
+  expect_true(res$dry_run)
 })
 
 test_that("ship() rejects invalid mode", {
