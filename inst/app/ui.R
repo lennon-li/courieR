@@ -1,18 +1,5 @@
 ui <- bslib::page_navbar(
-  title = div(
-    class = "app-brand",
-    div(
-      class = "app-brand-mark",
-      tags$div(
-        class = "app-logo-wrap",
-        tags$img(src = "logo.png", height = "84px",
-                 style = "vertical-align: middle; background: transparent;")
-      ),
-      tags$div(class = "app-version",
-               sprintf("v%s  ·  loaded %s", utils::packageVersion("courieR"),
-                       format(Sys.time(), "%Y-%m-%d %H:%M")))
-    )
-  ),
+  title = NULL,
   window_title = "courieR",
   theme = bslib::bs_theme(version = 5, preset = "shiny"),
   header = tagList(
@@ -68,6 +55,14 @@ ui <- bslib::page_navbar(
       bslib::nav_panel(
         "Manifest",
         div(class = "advanced-pane advanced-manifest", mod_manifest_ui("report"))
+      ),
+      bslib::nav_panel(
+        "Maintenance",
+        div(class = "advanced-pane advanced-maintenance",
+            bslib::card(
+              bslib::card_header("Restock"),
+              bslib::card_body(mod_sync_maintenance_ui("sync"))
+            ))
       )
     )
   )

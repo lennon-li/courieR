@@ -96,9 +96,10 @@ mod_depot_ship_server <- function(id,
     ns <- session$ns
 
     # ── Reactive state ─────────────────────────────────────────────────────
-    pkg_actions        <- reactiveVal(NULL)  # named char vec: pkg -> "skip"|"ship"|"online"
-    ship_filter_status <- reactiveVal(NULL)  # NULL = all diff statuses shown
-    depot_ship_result  <- reactiveVal(NULL)
+    pkg_actions          <- reactiveVal(NULL)  # named char vec: pkg -> "skip"|"ship"|"online"
+    ship_filter_status   <- reactiveVal(NULL)  # NULL = all diff statuses shown
+    depot_ship_result    <- reactiveVal(NULL)
+    shipping_in_progress <- reactiveVal(FALSE)
 
     get_direction <- function() {
       if (is.function(sync_direction_rv)) sync_direction_rv() else "A_to_B"
@@ -109,6 +110,27 @@ mod_depot_ship_server <- function(id,
     get_comp <- function() {
       if (is.function(comparison_rv)) comparison_rv() else NULL
     }
+
+    # ── Button enable/disable helpers ──────────────────────────────────────
+    disable_ship_btn <- function() {
+      shinyjs::runjs(sprintf(
+        "var b=document.getElementById('%s'); if(b) b.disabled=true;",
+        ns("depot_ship_btn")
+      ))
+    }
+    enable_ship_btn <- function() {
+      shinyjs::runjs(sprintf(
+        "var b=document.getElementById('%s'); if(b) b.disabled=false;",
+        ns("depot_ship_btn")
+      ))
+    }
+
+    observe({
+      actions     <- pkg_actions()
+      in_progress <- shipping_in_progress()
+      n_active    <- if (!is.null(actions)) sum(actions != "skip") else 0L
+      if (in_progress || n_active == 0L) disable_ship_btn() else enable_ship_btn()
+    })
 
     # ── Initialise defaults when comparison changes ─────────────────────────
     observeEvent(get_comp(), {
@@ -231,9 +253,9 @@ mod_depot_ship_server <- function(id,
 
     # ── Bulk action apply ──────────────────────────────────────────────────
     observeEvent(input$bulk_apply, {
-      selected_idx <- input$ship_table_rows_selected
+      selected_idx <- input$ship_cb_rows
       if (is.null(selected_idx) || length(selected_idx) == 0L) {
-        showNotification("Select rows in the table first.", type = "warning")
+        showNotification("Check rows in the table first.", type = "warning")
         return()
       }
       visible     <- visible_comp()
@@ -248,11 +270,13 @@ mod_depot_ship_server <- function(id,
     # ── Table ──────────────────────────────────────────────────────────────
     empty_ship_dt <- function() {
       DT::datatable(
-        data.frame(Package = character(), `Version A` = character(),
-                   `Version B` = character(), Status = character(),
-                   Action = character(), check.names = FALSE),
+        data.frame(` ` = character(), Package = character(),
+                   `Version A` = character(), `Version B` = character(),
+                   Status = character(), Action = character(),
+                   check.names = FALSE),
         rownames  = FALSE,
-        selection = "multiple",
+        selection = "none",
+        escape    = FALSE,
         options   = list(dom = "t", pageLength = -1)
       )
     }
@@ -264,7 +288,12 @@ mod_depot_ship_server <- function(id,
         return(empty_ship_dt())
 
       pkgs <- visible[["package"]]
+      cbs  <- vapply(seq_along(pkgs), function(i)
+        sprintf('<input type="checkbox" class="depot-ship-cb" data-rowidx="%d">', i),
+        character(1))
+
       display <- data.frame(
+        ` `        = cbs,
         Package    = pkgs,
         `Version A` = ifelse(is.na(visible[["version_in_a"]]),
                               "not installed", visible[["version_in_a"]]),
@@ -276,15 +305,39 @@ mod_depot_ship_server <- function(id,
         stringsAsFactors = FALSE
       )
 
+      cb_input <- ns("ship_cb_rows")
+
       DT::datatable(
         display,
         rownames  = FALSE,
-        selection = "multiple",
+        selection = "none",
+        escape    = FALSE,
         options   = list(
           dom        = "t",
           pageLength = -1,
           scrollY    = "400px",
-          scrollCollapse = TRUE
+          scrollCollapse = TRUE,
+          columnDefs = list(list(
+            targets   = 0,
+            orderable = FALSE,
+            width     = "30px",
+            className = "dt-center"
+          )),
+          drawCallback = DT::JS(sprintf(
+            'function(settings) {
+               var inputId = "%s";
+               var tbl = settings.nTable;
+               Shiny.setInputValue(inputId, null, {priority: "event"});
+               $(tbl).off("change.cbsel").on("change.cbsel", ".depot-ship-cb", function() {
+                 var rows = [];
+                 $(tbl).find(".depot-ship-cb:checked").each(function() {
+                   rows.push(parseInt($(this).attr("data-rowidx")));
+                 });
+                 Shiny.setInputValue(inputId, rows.length ? rows : null, {priority: "event"});
+               });
+             }',
+            cb_input
+          ))
         )
       ) |>
         DT::formatStyle(
@@ -313,15 +366,18 @@ mod_depot_ship_server <- function(id,
 
     # ── Plan summary ───────────────────────────────────────────────────────
     output$plan_summary <- renderUI({
-      actions <- pkg_actions()
+      actions     <- pkg_actions()
+      in_progress <- shipping_in_progress()
       if (is.null(actions)) return(NULL)
       n_online <- sum(actions == "online")
       n_ship   <- sum(actions == "ship")
       n_skip   <- sum(actions == "skip")
-      if (n_online + n_ship == 0L) {
-        shinyjs::disable("depot_ship_btn")
-      } else {
-        shinyjs::enable("depot_ship_btn")
+      if (in_progress) {
+        return(div(
+          class = "depot-ship-summary depot-ship-summary-busy",
+          tags$span(class = "sync-detecting-spinner", ""),
+          tags$span("Shipping in progress…")
+        ))
       }
       div(
         class = "depot-ship-summary",
@@ -339,6 +395,8 @@ mod_depot_ship_server <- function(id,
 
     # ── Ship button ────────────────────────────────────────────────────────
     observeEvent(input$depot_ship_btn, {
+      if (isTRUE(shipping_in_progress())) return()
+
       actions <- isolate(pkg_actions())
       comp    <- isolate(get_comp())
       from    <- if (is.function(from_r_path)) isolate(from_r_path()) else NULL
@@ -346,20 +404,28 @@ mod_depot_ship_server <- function(id,
       dir     <- isolate(get_direction())
 
       if (is.null(actions) || is.null(comp) || is.null(from) || is.null(to)) {
-        showNotification("Missing configuration — run Compare in Dispatch first.",
-                         type = "warning")
+        showNotification("Run Compare in Dispatch first, then return here to ship.",
+                         type = "warning", duration = 8)
         return()
       }
 
       batches <- .build_depot_ship_batches(actions, comp, dir, from, to)
       if (length(batches) == 0L) {
-        showNotification("No packages selected for shipping.", type = "warning")
+        showNotification("No packages are queued to ship (all set to Skip).",
+                         type = "warning")
         return()
       }
 
       total <- sum(sapply(batches, function(b) length(b$pkgs)))
       depot_ship_result(NULL)
+      shipping_in_progress(TRUE)
+      on.exit(shipping_in_progress(FALSE), add = TRUE)
       start <- Sys.time()
+
+      showNotification(
+        sprintf("Shipping %d package(s)… this may take a few minutes.", total),
+        type = "message", duration = NULL, id = "depot-ship-busy"
+      )
 
       all_results <- list()
       all_plans   <- list()
@@ -388,6 +454,8 @@ mod_depot_ship_server <- function(id,
         FALSE
       })
 
+      removeNotification("depot-ship-busy")
+
       elapsed <- as.numeric(difftime(Sys.time(), start, units = "secs"))
       combined_results <- if (length(all_results) > 0L)
         data.table::rbindlist(all_results, fill = TRUE)
@@ -409,8 +477,8 @@ mod_depot_ship_server <- function(id,
 
       if (ok) {
         showNotification(
-          sprintf("Ship complete. %d package(s) processed.", total),
-          type = "message"
+          sprintf("Ship complete — %d package(s) processed in %.0fs.", total, elapsed),
+          type = "message", duration = 10
         )
         current <- isolate(pkg_actions())
         shipped <- names(actions)[actions != "skip"]

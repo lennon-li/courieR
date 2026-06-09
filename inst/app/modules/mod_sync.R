@@ -30,6 +30,16 @@ mod_sync_ui <- function(id) {
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
+      div(
+        class = "app-brand-mark sync-sidebar-logo",
+        tags$div(
+          class = "app-logo-wrap",
+          tags$img(src = "logo.png", height = "64px",
+                   style = "vertical-align: middle; background: transparent;")
+        ),
+        tags$div(class = "app-version",
+                 sprintf("v%s", utils::packageVersion("courieR")))
+      ),
       uiOutput(ns("detecting_msg")),
       uiOutput(ns("detected_installs")),
       hr(),
@@ -64,15 +74,6 @@ mod_sync_ui <- function(id) {
       actionButton(ns("preview_btn"), "Preview plan (no install)",
                    class = "btn sync-preview-btn"),
       actionButton(ns("sync_btn"), "Ship", class = "btn sync-compare-btn"),
-      hr(),
-      tags$div(class = "sync-select-label", "Maintenance"),
-      div(
-        class = "sync-restock-wrap",
-        actionButton(ns("restock_a"), "Restock source from CRAN",
-                     class = "btn sync-restock-btn"),
-        actionButton(ns("restock_b"), "Restock target from CRAN",
-                     class = "btn sync-restock-btn")
-      ),
     ),
     div(
       id = "nav-progress-wrap",
@@ -103,6 +104,17 @@ mod_sync_ui <- function(id) {
       )
     )
   )
+  )
+}
+
+mod_sync_maintenance_ui <- function(id) {
+  ns <- NS(id)
+  div(
+    class = "sync-restock-wrap",
+    actionButton(ns("restock_a"), "Restock source from CRAN",
+                 class = "btn sync-restock-btn"),
+    actionButton(ns("restock_b"), "Restock target from CRAN",
+                 class = "btn sync-restock-btn")
   )
 }
 
