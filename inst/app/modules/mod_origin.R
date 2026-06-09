@@ -44,6 +44,27 @@ mod_origin_server <- function(id,
     detecting  <- reactiveVal(FALSE)
     loading_pkg <- reactiveVal(FALSE)
 
+    # Short form of a library path (its last two components) used to
+    # disambiguate installs that share a version but write to different libraries.
+    lib_short <- function(library) {
+      if (is.null(library) || length(library) == 0 || is.na(library) || !nzchar(library)) {
+        return(NA_character_)
+      }
+      parts <- strsplit(library, "[/\\\\]+")[[1]]
+      parts <- parts[nzchar(parts)]
+      if (length(parts) >= 2) paste(utils::tail(parts, 2), collapse = "/") else library
+    }
+
+    depot_label <- function(path, ver, library = NA_character_) {
+      loc <- if (grepl("AppData", path, ignore.case = TRUE)) "AppData"
+             else if (grepl("Program Files", path, ignore.case = TRUE)) "Program Files"
+             else if (grepl("Documents", path, ignore.case = TRUE)) "Documents"
+             else basename(dirname(dirname(path)))
+      base <- paste0("R ", ver, "  —  ", loc)
+      ls <- lib_short(library)
+      if (!is.na(ls)) paste0(base, "  ·  lib: ", ls) else base
+    }
+
     # Detection is driven from the Sync tab's Detect button, which populates the
     # shared routes_cache. Pick up its result whenever it changes.
     if (!is.null(routes_cache)) {
@@ -71,7 +92,7 @@ mod_origin_server <- function(id,
         ))
       }
       DT::datatable(
-        routes[, intersect(c("version", "rscript_path", "is_current"), names(routes))],
+        routes[, intersect(c("version", "rscript_path", "library", "is_current"), names(routes))],
         options = list(pageLength = 5, dom = "tip"),
         rownames = FALSE
       )
@@ -87,13 +108,8 @@ mod_origin_server <- function(id,
         return(tags$p(class = "update-no-selection", "No depots detected."))
       }
 
-      labels  <- mapply(function(path, ver) {
-        loc <- if (grepl("AppData", path, ignore.case = TRUE)) "AppData"
-               else if (grepl("Program Files", path, ignore.case = TRUE)) "Program Files"
-               else if (grepl("Documents", path, ignore.case = TRUE)) "Documents"
-               else basename(dirname(dirname(path)))
-        paste0("R ", ver, "  —  ", loc)
-      }, routes$rscript_path, routes$version)
+      lib_col <- if ("library" %in% names(routes)) routes$library else rep(NA_character_, nrow(routes))
+      labels  <- mapply(depot_label, routes$rscript_path, routes$version, lib_col, USE.NAMES = FALSE)
 
       choices <- stats::setNames(routes$rscript_path, labels)
 
@@ -184,13 +200,8 @@ mod_origin_server <- function(id,
     observeEvent(routes_rv(), {
       routes <- routes_rv()
       if (is.null(routes) || nrow(routes) == 0) return()
-      labels <- mapply(function(path, ver) {
-        loc <- if (grepl("AppData", path, ignore.case = TRUE)) "AppData"
-               else if (grepl("Program Files", path, ignore.case = TRUE)) "Program Files"
-               else if (grepl("Documents", path, ignore.case = TRUE)) "Documents"
-               else basename(dirname(dirname(path)))
-        paste0("R ", ver, "  —  ", loc)
-      }, routes$rscript_path, routes$version)
+      lib_col <- if ("library" %in% names(routes)) routes$library else rep(NA_character_, nrow(routes))
+      labels <- mapply(depot_label, routes$rscript_path, routes$version, lib_col, USE.NAMES = FALSE)
       choices <- stats::setNames(routes$rscript_path, labels)
       updateSelectInput(session, "selected_path", choices = choices,
                         selected = routes$rscript_path[[1]])

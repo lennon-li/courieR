@@ -12,6 +12,8 @@ ship(
   upgrade = FALSE,
   log_callback = NULL,
   mode = c("online", "offline", "preserve"),
+  source_pkgs = NULL,
+  target_pkgs = NULL,
   ...
 )
 }
@@ -44,6 +46,11 @@ during package transfer.}
 \code{"offline"} copies package directories by file and skips packages without
 a valid source path, and \code{"preserve"} copies first then falls back to a
 pinned pak spec for packages that could not be copied.}
+
+\item{source_pkgs, target_pkgs}{Optional pre-scanned manifests (as returned by
+\code{\link[=manifest]{manifest()}}) for the source and target installations. When supplied, the
+corresponding \code{\link[=manifest]{manifest()}} subprocess scan is skipped, avoiding redundant
+library scans when the caller has already scanned both installations.}
 
 \item{...}{Reserved for future arguments.}
 }

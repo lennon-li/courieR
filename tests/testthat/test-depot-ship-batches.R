@@ -1,4 +1,5 @@
-source("inst/app/modules/mod_depot_ship.R", local = TRUE)
+source(testthat::test_path("..", "..", "inst", "app", "modules", "mod_depot_ship.R"),
+       local = TRUE)
 
 comp <- data.frame(
   package = c("ggplot2", "dplyr", "tidyr", "patchwork"),

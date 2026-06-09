@@ -149,7 +149,18 @@ mod_sync_server <- function(id,
       manifest_cache(cache)
     }
 
-    r_label <- function(path, version) {
+    # Short, human-distinguishable form of a library path: its last two path
+    # components (e.g. ".../x86_64-pc-linux-gnu-library/4.5" -> "…-library/4.5").
+    lib_short <- function(library) {
+      if (is.null(library) || length(library) == 0 || is.na(library) || !nzchar(library)) {
+        return(NA_character_)
+      }
+      parts <- strsplit(library, "[/\\\\]+")[[1]]
+      parts <- parts[nzchar(parts)]
+      if (length(parts) >= 2) paste(utils::tail(parts, 2), collapse = "/") else library
+    }
+
+    r_label <- function(path, version, library = NA_character_) {
       loc <- if (grepl("AppData", path, ignore.case = TRUE)) {
         "AppData"
       } else if (grepl("Program Files", path, ignore.case = TRUE)) {
@@ -159,7 +170,18 @@ mod_sync_server <- function(id,
       } else {
         basename(dirname(dirname(path)))
       }
-      paste0("R ", version, "  —  ", loc)
+      base <- paste0("R ", version, "  —  ", loc)
+      ls <- lib_short(library)
+      if (!is.na(ls)) paste0(base, "  ·  lib: ", ls) else base
+    }
+
+    # Build a named choices vector (label -> rscript_path) for a routes frame,
+    # tolerating a missing `library` column (older cached detections).
+    route_choices <- function(df) {
+      if (is.null(df) || nrow(df) == 0) return(character(0))
+      lib_col <- if ("library" %in% names(df)) df$library else rep(NA_character_, nrow(df))
+      labels <- mapply(r_label, df$rscript_path, df$version, lib_col, USE.NAMES = FALSE)
+      stats::setNames(df$rscript_path, labels)
     }
 
     r_badge <- function(version, bucket) {
@@ -337,6 +359,17 @@ mod_sync_server <- function(id,
       as.character(routes$version[[idx]])
     }
 
+    route_library <- function(path) {
+      routes <- routes_data()
+      if (nrow(routes) == 0 || is.null(path) || !nzchar(path) ||
+          !"library" %in% names(routes)) {
+        return(NA_character_)
+      }
+      idx <- match(path, routes$rscript_path)
+      if (is.na(idx)) return(NA_character_)
+      as.character(routes$library[[idx]])
+    }
+
     route_display <- function(path) {
       routes <- routes_data()
       if (nrow(routes) == 0 || is.null(path) || !nzchar(path)) {
@@ -348,26 +381,15 @@ mod_sync_server <- function(id,
         return("selected R installation")
       }
 
-      r_label(path, routes$version[[idx]])
+      lib <- if ("library" %in% names(routes)) routes$library[[idx]] else NA_character_
+      r_label(path, routes$version[[idx]], lib)
     }
 
-    # Installations eligible as a *target* for a given source: any OTHER
-    # installation whose R version is the same or newer than the source. Package
-    # transfer only ever goes source → (same-or-newer) target, because an older
-    # R cannot reliably hold packages built for / requiring a newer R. Unknown
-    # versions stay eligible (online mode adapts to whatever the target is).
+    # Installations eligible as a *target* for the given source. See
+    # eligible_targets() in R/utils.R for the rule (excludes the source itself,
+    # same-library installs, and older-R installs).
     valid_targets <- function(src) {
-      r <- routes_data()
-      if (is.null(src) || !nzchar(src) || nrow(r) == 0) return(r[0, , drop = FALSE])
-      src_v <- tryCatch(package_version(route_version(src)), error = function(e) NULL)
-      keep <- vapply(seq_len(nrow(r)), function(i) {
-        path <- r$rscript_path[[i]]
-        if (identical(path, src)) return(FALSE)
-        tv <- tryCatch(package_version(as.character(r$version[[i]])), error = function(e) NULL)
-        if (is.null(src_v) || is.null(tv)) return(TRUE)
-        tv >= src_v
-      }, logical(1))
-      r[keep, , drop = FALSE]
+      courieR:::eligible_targets(routes_data(), src)
     }
 
     normalize_manifest <- function(pkgs) {
@@ -566,17 +588,44 @@ mod_sync_server <- function(id,
       set_sync_progress(pct_base + pct_span, "Comparison ready", active = TRUE)
     }
 
+    # Transparency: dump every detected installation to the log as
+    # version · executable · library, and call out any installs that share a
+    # library (same package store — they cannot meaningfully ship to each other).
+    log_detection_summary <- function(r) {
+      if (is.null(r) || nrow(r) == 0) return(invisible(NULL))
+      has_lib <- "library" %in% names(r)
+      add_sync_log("Detected installations (version · executable · library):")
+      for (i in seq_len(nrow(r))) {
+        cur     <- if (isTRUE(r$is_current[[i]])) "  [current]" else ""
+        lib     <- if (has_lib) r$library[[i]] else NA_character_
+        lib_txt <- if (is.null(lib) || is.na(lib) || !nzchar(lib)) "unknown" else lib
+        add_sync_log(sprintf("  - R %s%s  ·  %s  ·  %s",
+                             r$version[[i]], cur, r$rscript_path[[i]], lib_txt))
+      }
+      if (has_lib) {
+        libs <- r$library
+        ok   <- !is.na(libs) & nzchar(libs)
+        for (d in unique(libs[ok][duplicated(libs[ok])])) {
+          shared <- r$version[ok & libs == d]
+          add_sync_log(sprintf(
+            "  note: R %s share one library (%s) — same packages; cannot ship to each other.",
+            paste(shared, collapse = ", "), d))
+        }
+      }
+      invisible(NULL)
+    }
+
     apply_routes <- function(r) {
       routes_data(r)
       detection_status(sprintf("Detection complete: found %d installation(s).", nrow(r)))
       add_sync_log(sprintf("Detection complete: found %d installation(s).", nrow(r)))
+      log_detection_summary(r)
       if (nrow(r) == 0) {
         showNotification("No R installations detected.", type = "warning")
         updateSelectInput(session, "install_a", choices = character(0), selected = character(0))
         updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
       } else {
-        labels <- mapply(r_label, r$rscript_path, r$version)
-        choices <- stats::setNames(r$rscript_path, labels)
+        choices <- route_choices(r)
 
         current_a <- isolate(input$install_a)
         current_b <- isolate(input$install_b)
@@ -830,8 +879,7 @@ mod_sync_server <- function(id,
         updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
         return()
       }
-      labels  <- mapply(r_label, valid$rscript_path, valid$version)
-      choices <- stats::setNames(valid$rscript_path, labels)
+      choices <- route_choices(valid)
       current_b <- isolate(input$install_b)
       sel <- if (!is.null(current_b) && current_b %in% valid$rscript_path) current_b else valid$rscript_path[[1]]
       updateSelectInput(session, "install_b", choices = choices, selected = sel)
@@ -845,7 +893,9 @@ mod_sync_server <- function(id,
       if (nrow(valid_targets(src)) > 0) return(NULL)
       tags$div(
         class = "sync-target-hint",
-        "No same-or-newer R installation to ship into. Packages only transfer to an equal or newer R version."
+        "No eligible target: every other installation is either an older R, or ",
+        "shares this source's package library (shipping there would change nothing). ",
+        "Packages only transfer to an equal-or-newer R with a different library."
       )
     })
 

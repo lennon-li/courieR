@@ -13,6 +13,11 @@
 #'   \describe{
 #'     \item{version}{Character. R version string, e.g. `"4.4.1"`.}
 #'     \item{rscript_path}{Character. Absolute path to the `Rscript` executable.}
+#'     \item{library}{Character. The installation's primary library location
+#'       (`.libPaths()[1]` under a vanilla session) — where `install.packages()`
+#'       writes by default. This is the effective package store; two installs
+#'       that share a `library` hold the same packages. Normalized lexically for
+#'       comparison. `NA` if it could not be determined.}
 #'     \item{is_current}{Logical. `TRUE` for the R session running courieR.}
 #'   }
 #'
@@ -239,9 +244,19 @@ find_routes <- function(search_paths = NULL) {
     major <- sub(".*?(\\d+)\\s*$", "\\1", trimws(parts[1]))
     minor <- trimws(parts[2])
 
+    # parts[3] holds the install's .libPaths() joined by ||LIB||. The first
+    # entry is the effective install target (where install.packages() writes).
+    # Normalize lexically so the same library reached from two installs compares
+    # equal; path_norm does not touch the filesystem, so it is safe even when the
+    # (user) library directory does not exist yet.
+    libs <- strsplit(parts[3], "\\|\\|LIB\\|\\|")[[1]]
+    libs <- trimws(libs[nzchar(trimws(libs))])
+    primary_lib <- if (length(libs) >= 1) as.character(fs::path_norm(libs[1])) else NA_character_
+
     list(
       version      = paste(major, minor, sep = "."),
       rscript_path = rscript,
+      library      = primary_lib,
       is_current   = FALSE
     )
   })
@@ -250,7 +265,8 @@ find_routes <- function(search_paths = NULL) {
 
   if (length(res_list) == 0) {
     return(data.frame(
-      version = character(), rscript_path = character(), is_current = logical(),
+      version = character(), rscript_path = character(), library = character(),
+      is_current = logical(),
       stringsAsFactors = FALSE
     ))
   }
@@ -258,8 +274,10 @@ find_routes <- function(search_paths = NULL) {
   dt <- data.table::rbindlist(res_list)
 
   dt$rscript_path <- as.character(fs::path_real(dt$rscript_path))
+  # Dedup by executable only. Two installs of the same version (e.g. 4.5.1 and
+  # 4.5.2, or two side-by-side 4.5.x) are distinct depots and must both survive;
+  # they are distinguished downstream by their library location, not version.
   dt <- unique(dt, by = "rscript_path")
-  dt <- unique(dt, by = "version")
 
   current_rscript <- file.path(R.home("bin"), "Rscript")
   if (os == "windows") {

@@ -18,6 +18,11 @@ following columns:
 \describe{
 \item{version}{Character. R version string, e.g. \code{"4.4.1"}.}
 \item{rscript_path}{Character. Absolute path to the \code{Rscript} executable.}
+\item{library}{Character. The installation's primary library location
+(\code{.libPaths()[1]} under a vanilla session) — where \code{install.packages()}
+writes by default. This is the effective package store; two installs
+that share a \code{library} hold the same packages. Normalized lexically for
+comparison. \code{NA} if it could not be determined.}
 \item{is_current}{Logical. \code{TRUE} for the R session running courieR.}
 }
 }
