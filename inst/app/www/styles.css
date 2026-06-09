@@ -1465,7 +1465,15 @@ body {
   margin-left: auto;
 }
 
-.depot-bulk-apply-btn {
+.depot-ship-mode-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #355066;
+  white-space: nowrap;
+}
+
+.depot-select-all-btn,
+.depot-clear-sel-btn {
   background: #f0f2f5;
   border: 1px solid #ccd8e2;
   color: #355066;
@@ -1473,8 +1481,14 @@ body {
   border-radius: 7px;
 }
 
-.depot-bulk-apply-btn:hover {
+.depot-select-all-btn:hover,
+.depot-clear-sel-btn:hover {
   background: #e0eaf3;
+}
+
+.depot-ship-summary-empty {
+  color: #9aabba;
+  font-weight: 500;
 }
 
 .depot-ship-summary {

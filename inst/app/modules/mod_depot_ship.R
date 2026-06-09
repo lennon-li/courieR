@@ -47,10 +47,21 @@ mod_depot_ship_ui <- function(id) {
   div(
     class = "depot-ship-pane",
 
+    # Small JS helper: check/uncheck every visible row checkbox and notify Shiny.
+    tags$script(HTML(
+      "function courierDepotSelectAll(tableId, checked){
+         var root = document.getElementById(tableId);
+         if(!root) return;
+         var cbs = root.querySelectorAll('.depot-ship-cb');
+         cbs.forEach(function(c){ c.checked = checked; });
+         if(cbs.length){ cbs[0].dispatchEvent(new Event('change', {bubbles:true})); }
+       }"
+    )),
+
     # Zone 1 — context bar
     uiOutput(ns("context_bar")),
 
-    # Zone 2 — filters + search + toolbar + table
+    # Zone 2 — filters + search/mode toolbar + table
     uiOutput(ns("ship_chips")),
     div(
       class = "depot-ship-toolbar",
@@ -58,15 +69,20 @@ mod_depot_ship_ui <- function(id) {
                 placeholder = "Search packages…", width = "220px"),
       div(
         class = "depot-ship-bulk",
+        tags$span(class = "depot-ship-mode-label", "How to ship:"),
         selectInput(
-          ns("bulk_action"), label = NULL,
-          choices  = c("Skip" = "skip", "Ship as-is" = "ship", "Install online" = "online"),
+          ns("ship_mode"), label = NULL,
+          choices  = c("Install online" = "online", "Ship as-is" = "ship"),
           selected = "online",
           selectize = FALSE,
-          width = "160px"
+          width = "150px"
         ),
-        actionButton(ns("bulk_apply"), "Apply to selected",
-                     class = "btn btn-sm depot-bulk-apply-btn")
+        actionButton(ns("select_all"), "Select all shown",
+                     class = "btn btn-sm depot-select-all-btn",
+                     onclick = sprintf("courierDepotSelectAll('%s', true)", ns("ship_table"))),
+        actionButton(ns("clear_sel"), "Clear",
+                     class = "btn btn-sm depot-clear-sel-btn",
+                     onclick = sprintf("courierDepotSelectAll('%s', false)", ns("ship_table")))
       )
     ),
     DT::dataTableOutput(ns("ship_table")),
@@ -96,7 +112,9 @@ mod_depot_ship_server <- function(id,
     ns <- session$ns
 
     # ── Reactive state ─────────────────────────────────────────────────────
-    pkg_actions          <- reactiveVal(NULL)  # named char vec: pkg -> "skip"|"ship"|"online"
+    # The checked rows ARE the shipment: input$ship_cb_rows holds 1-based row
+    # indices into visible_comp(). The "How to ship" dropdown (input$ship_mode)
+    # decides the mode applied to that checked set.
     ship_filter_status   <- reactiveVal(NULL)  # NULL = all diff statuses shown
     depot_ship_result    <- reactiveVal(NULL)
     shipping_in_progress <- reactiveVal(FALSE)
@@ -111,54 +129,32 @@ mod_depot_ship_server <- function(id,
       if (is.function(comparison_rv)) comparison_rv() else NULL
     }
 
-    # ── Button enable/disable helpers ──────────────────────────────────────
-    disable_ship_btn <- function() {
-      shinyjs::runjs(sprintf(
-        "var b=document.getElementById('%s'); if(b) b.disabled=true;",
-        ns("depot_ship_btn")
-      ))
-    }
-    enable_ship_btn <- function() {
-      shinyjs::runjs(sprintf(
-        "var b=document.getElementById('%s'); if(b) b.disabled=false;",
-        ns("depot_ship_btn")
-      ))
-    }
-
+    # Ship button reflects the checked-row count: disabled with 0 selected or
+    # while a ship is running, and its label shows the count ("Ship 3 selected").
     observe({
-      actions     <- pkg_actions()
+      n           <- length(input$ship_cb_rows)
       in_progress <- shipping_in_progress()
-      n_active    <- if (!is.null(actions)) sum(actions != "skip") else 0L
-      if (in_progress || n_active == 0L) disable_ship_btn() else enable_ship_btn()
+      enabled     <- !in_progress && n > 0L
+      label       <- if (n > 0L) sprintf("Ship %d selected", n) else "Ship"
+      shinyjs::runjs(sprintf(
+        "var b=document.getElementById('%s'); if(b){ b.disabled=%s; b.textContent=%s; }",
+        ns("depot_ship_btn"),
+        if (enabled) "false" else "true",
+        jsonlite::toJSON(label, auto_unbox = TRUE)
+      ))
     })
 
-    # ── Initialise defaults when comparison changes ─────────────────────────
+    # ── Defaults when comparison changes ────────────────────────────────────
+    # Show the differing statuses by default; selection starts empty so the user
+    # checks exactly what they want to ship. Also default the mode dropdown to
+    # the global transfer mode chosen in Dispatch.
     observeEvent(get_comp(), {
       comp <- get_comp()
-      if (is.null(comp) || nrow(comp) == 0) { pkg_actions(NULL); return() }
-
-      direction      <- get_direction()
-      default_action <- switch(get_mode(),
-        online   = "online",
-        offline  = "ship",
-        preserve = "ship",
-        "online"
-      )
-
-      diff_pkgs <- switch(direction,
-        A_to_B = comp[["package"]][comp[["status"]] %in% c("missing-from-B", "newer-in-A")],
-        B_to_A = comp[["package"]][comp[["status"]] %in% c("missing-from-A", "newer-in-B")],
-        full   = comp[["package"]][comp[["status"]] != "same"],
-        character(0)
-      )
-
-      actions             <- rep("skip", nrow(comp))
-      names(actions)      <- comp[["package"]]
-      actions[diff_pkgs]  <- default_action
-
-      pkg_actions(actions)
+      if (is.null(comp) || nrow(comp) == 0) return()
       ship_filter_status(c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B"))
       depot_ship_result(NULL)
+      mode_default <- switch(get_mode(), offline = "ship", preserve = "ship", "online")
+      updateSelectInput(session, "ship_mode", selected = mode_default)
     }, ignoreNULL = FALSE)
 
     # ── Pre-populate search from Browse "View in Ship" ──────────────────────
@@ -251,28 +247,12 @@ mod_depot_ship_server <- function(id,
       out
     })
 
-    # ── Bulk action apply ──────────────────────────────────────────────────
-    observeEvent(input$bulk_apply, {
-      selected_idx <- input$ship_cb_rows
-      if (is.null(selected_idx) || length(selected_idx) == 0L) {
-        showNotification("Check rows in the table first.", type = "warning")
-        return()
-      }
-      visible     <- visible_comp()
-      if (is.null(visible)) return()
-      target_pkgs <- visible[["package"]][selected_idx]
-      action      <- input$bulk_action
-      current     <- isolate(pkg_actions())
-      current[target_pkgs] <- action
-      pkg_actions(current)
-    })
-
     # ── Table ──────────────────────────────────────────────────────────────
     empty_ship_dt <- function() {
       DT::datatable(
         data.frame(` ` = character(), Package = character(),
                    `Version A` = character(), `Version B` = character(),
-                   Status = character(), Action = character(),
+                   Status = character(),
                    check.names = FALSE),
         rownames  = FALSE,
         selection = "none",
@@ -283,8 +263,7 @@ mod_depot_ship_server <- function(id,
 
     output$ship_table <- DT::renderDataTable({
       visible <- visible_comp()
-      actions <- pkg_actions()
-      if (is.null(visible) || nrow(visible) == 0L || is.null(actions))
+      if (is.null(visible) || nrow(visible) == 0L)
         return(empty_ship_dt())
 
       pkgs <- visible[["package"]]
@@ -300,7 +279,6 @@ mod_depot_ship_server <- function(id,
         `Version B` = ifelse(is.na(visible[["version_in_b"]]),
                               "not installed", visible[["version_in_b"]]),
         Status     = visible[["status"]],
-        Action     = actions[pkgs],
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
@@ -341,21 +319,6 @@ mod_depot_ship_server <- function(id,
         )
       ) |>
         DT::formatStyle(
-          "Action",
-          backgroundColor = DT::styleEqual(
-            c("skip",    "ship",    "online"),
-            c("#f5f5f5", "#fff4ec", "#eef6ff")
-          ),
-          color = DT::styleEqual(
-            c("skip",    "ship",    "online"),
-            c("#9aabba", "#c27a3a", "#1d6fa5")
-          ),
-          fontWeight = DT::styleEqual(
-            c("skip", "ship", "online"),
-            c("400",  "600",  "700")
-          )
-        ) |>
-        DT::formatStyle(
           "Status",
           backgroundColor = DT::styleEqual(
             c("same",    "missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B"),
@@ -366,12 +329,9 @@ mod_depot_ship_server <- function(id,
 
     # ── Plan summary ───────────────────────────────────────────────────────
     output$plan_summary <- renderUI({
-      actions     <- pkg_actions()
+      comp <- get_comp()
+      if (is.null(comp)) return(NULL)
       in_progress <- shipping_in_progress()
-      if (is.null(actions)) return(NULL)
-      n_online <- sum(actions == "online")
-      n_ship   <- sum(actions == "ship")
-      n_skip   <- sum(actions == "skip")
       if (in_progress) {
         return(div(
           class = "depot-ship-summary depot-ship-summary-busy",
@@ -379,17 +339,19 @@ mod_depot_ship_server <- function(id,
           tags$span("Shipping in progress…")
         ))
       }
+      n    <- length(input$ship_cb_rows)
+      mode <- input$ship_mode %||% "online"
+      mode_label <- if (identical(mode, "ship")) "ship as-is" else "install online"
+      if (n == 0L) {
+        return(div(
+          class = "depot-ship-summary depot-ship-summary-empty",
+          tags$span("Check packages to ship, then press Ship.")
+        ))
+      }
       div(
         class = "depot-ship-summary",
-        if (n_online > 0)
-          tags$span(class = "depot-summary-online",
-                    sprintf("%d × install online", n_online)),
-        if (n_ship > 0)
-          tags$span(class = "depot-summary-ship",
-                    sprintf("%d × ship as-is", n_ship)),
-        if (n_skip > 0)
-          tags$span(class = "depot-summary-skip",
-                    sprintf("%d × skip", n_skip))
+        tags$span(class = if (identical(mode, "ship")) "depot-summary-ship" else "depot-summary-online",
+                  sprintf("%d package(s) selected — %s", n, mode_label))
       )
     })
 
@@ -397,22 +359,36 @@ mod_depot_ship_server <- function(id,
     observeEvent(input$depot_ship_btn, {
       if (isTRUE(shipping_in_progress())) return()
 
-      actions <- isolate(pkg_actions())
       comp    <- isolate(get_comp())
+      visible <- isolate(visible_comp())
+      sel_idx <- isolate(input$ship_cb_rows)
+      mode    <- isolate(input$ship_mode) %||% "online"
       from    <- if (is.function(from_r_path)) isolate(from_r_path()) else NULL
       to      <- if (is.function(to_r_path))   isolate(to_r_path())   else NULL
       dir     <- isolate(get_direction())
 
-      if (is.null(actions) || is.null(comp) || is.null(from) || is.null(to)) {
+      if (is.null(comp) || is.null(from) || is.null(to)) {
         showNotification("Run Compare in Dispatch first, then return here to ship.",
                          type = "warning", duration = 8)
         return()
       }
 
+      if (is.null(sel_idx) || length(sel_idx) == 0L || is.null(visible)) {
+        showNotification("Check at least one package to ship.", type = "warning")
+        return()
+      }
+
+      # The checked rows are the shipment. Build the per-package action vector
+      # ship() expects: selected packages get the chosen mode, everything else
+      # is skipped. Batch routing (direction, online vs offline) is unchanged.
+      selected_pkgs        <- visible[["package"]][sel_idx]
+      actions              <- rep("skip", nrow(comp))
+      names(actions)       <- comp[["package"]]
+      actions[selected_pkgs] <- mode
+
       batches <- .build_depot_ship_batches(actions, comp, dir, from, to)
       if (length(batches) == 0L) {
-        showNotification("No packages are queued to ship (all set to Skip).",
-                         type = "warning")
+        showNotification("No packages are queued to ship.", type = "warning")
         return()
       }
 
@@ -480,10 +456,8 @@ mod_depot_ship_server <- function(id,
           sprintf("Ship complete — %d package(s) processed in %.0fs.", total, elapsed),
           type = "message", duration = 10
         )
-        current <- isolate(pkg_actions())
-        shipped <- names(actions)[actions != "skip"]
-        current[shipped] <- "skip"
-        pkg_actions(current)
+        # Clear the selection so the shipped packages aren't accidentally re-sent.
+        shinyjs::runjs(sprintf("courierDepotSelectAll('%s', false);", ns("ship_table")))
       }
     })
 
