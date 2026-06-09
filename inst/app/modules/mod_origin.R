@@ -1,33 +1,28 @@
-mod_origin_ui <- function(id) {
+mod_origin_browse_ui <- function(id) {
   ns <- NS(id)
-  bslib::navset_card_tab(
-    id = ns("depot_tabs"),
-    bslib::nav_panel(
-      "Browse",
-      tagList(
-        bslib::card(
-          bslib::card_header("Detected Depots"),
-          bslib::card_body(
-            uiOutput(ns("detecting_msg")),
-            DT::dataTableOutput(ns("r_installs"))
-          )
-        ),
-        bslib::card(
-          bslib::card_header("Depot Manifest"),
-          bslib::card_body(
-            uiOutput(ns("pkg_controls")),
-            uiOutput(ns("loading_msg")),
-            DT::dataTableOutput(ns("packages")),
-            uiOutput(ns("browse_to_ship_btn"))
-          )
-        )
+  tagList(
+    bslib::card(
+      bslib::card_header("Detected Depots"),
+      bslib::card_body(
+        uiOutput(ns("detecting_msg")),
+        DT::dataTableOutput(ns("r_installs"))
       )
     ),
-    bslib::nav_panel(
-      "Ship",
-      mod_depot_ship_ui(ns("depot_ship"))
+    bslib::card(
+      bslib::card_header("Depot Manifest"),
+      bslib::card_body(
+        uiOutput(ns("pkg_controls")),
+        uiOutput(ns("loading_msg")),
+        DT::dataTableOutput(ns("packages")),
+        uiOutput(ns("browse_to_ship_btn"))
+      )
     )
   )
+}
+
+mod_origin_ship_ui <- function(id) {
+  ns <- NS(id)
+  mod_depot_ship_ui(ns("depot_ship"))
 }
 
 mod_origin_server <- function(id,
@@ -232,7 +227,7 @@ mod_origin_server <- function(id,
                      !(pkgs$priority %in% c("base", "recommended")), ]
       pkg_name <- pkgs$package[selected[[1]]]
       browse_to_ship_pkg(pkg_name)
-      bslib::nav_select(ns("depot_tabs"), "Ship", session = session)
+      shinyjs::runjs("navigateToCustomDispatch();")
     })
 
     # ── Ship sub-module ───────────────────────────────────────────────────

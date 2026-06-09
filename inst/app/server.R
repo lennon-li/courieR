@@ -13,7 +13,7 @@ server <- function(input, output, session) {
   }
   mod_error_reporter_server("reporter", error_rv)
 
-  output$advanced_badge <- renderUI({
+  output$custom_dispatch_badge <- renderUI({
     n <- actionable_count()
     if (n == 0L) return(NULL)
     tags$span(class = "advanced-tab-badge", n)
