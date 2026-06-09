@@ -80,6 +80,10 @@ following columns:</p><dl><dt>version</dt>
 <dt>rscript_path</dt>
 <dd><p>Character. Absolute path to the <code>Rscript</code> executable.</p></dd>
 
+<dt>home</dt>
+<dd><p>Character. The installation directory (<code><a href="https://rdrr.io/r/base/Rhome.html" class="external-link">R.home()</a></code>), i.e. where
+this R is installed. Normalized lexically for comparison.</p></dd>
+
 <dt>library</dt>
 <dd><p>Character. The installation's primary library location
 (<code>.libPaths()[1]</code> under a vanilla session) — where <code><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages()</a></code>

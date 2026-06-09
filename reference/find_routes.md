@@ -31,6 +31,12 @@ columns:
 
   Character. Absolute path to the `Rscript` executable.
 
+- home:
+
+  Character. The installation directory
+  ([`R.home()`](https://rdrr.io/r/base/Rhome.html)), i.e. where this R
+  is installed. Normalized lexically for comparison.
+
 - library:
 
   Character. The installation's primary library location
