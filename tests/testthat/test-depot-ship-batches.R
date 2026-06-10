@@ -1,5 +1,16 @@
-source(testthat::test_path("..", "..", "inst", "app", "modules", "mod_depot_ship.R"),
-       local = TRUE)
+# Find path to mod_depot_ship.R
+mod_path <- testthat::test_path("..", "..", "inst", "app", "modules", "mod_depot_ship.R")
+if (!file.exists(mod_path)) {
+  # During R CMD check, the package is installed, inst/ is stripped,
+  # and the file is located inside the installed package structure.
+  mod_path <- system.file("app/modules/mod_depot_ship.R", package = "courieR")
+}
+if (mod_path == "" || !file.exists(mod_path)) {
+  # Fallback for R CMD check structure relative to test directory
+  mod_path <- testthat::test_path("..", "..", "courieR", "app", "modules", "mod_depot_ship.R")
+}
+
+source(mod_path, local = TRUE)
 
 comp <- data.frame(
   package = c("ggplot2", "dplyr", "tidyr", "patchwork"),
