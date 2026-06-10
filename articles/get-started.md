@@ -181,8 +181,8 @@ print(result$plan)
 By default,
 [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) only
 installs missing packages. Pass `upgrade = TRUE` to also update packages
-that are present but at an older version (mirrors what the Sync tab
-does):
+that are present but at an older version (mirrors what the Bulk Dispatch
+tab does):
 
 ``` r
 
@@ -389,9 +389,9 @@ hub()
 The first sync on a machine can take 1–2 minutes while pak builds its
 metadata cache. Subsequent syncs are faster.
 
-The Advanced tab exposes
+The **Browse** and **Manifest** tabs expose
 [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md)
-output and lets you inspect any detected R installation’s full package
+output and let you inspect any detected R installation’s full package
 list.
 
 ------------------------------------------------------------------------

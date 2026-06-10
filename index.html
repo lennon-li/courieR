@@ -165,9 +165,9 @@
 </table>
 </div>
 <div class="section level2">
-<h2 id="dashboard--sync-tab">Dashboard — Sync Tab<a class="anchor" aria-label="anchor" href="#dashboard--sync-tab"></a>
+<h2 id="dashboard--bulk-dispatch">Dashboard — Bulk Dispatch<a class="anchor" aria-label="anchor" href="#dashboard--bulk-dispatch"></a>
 </h2>
-<p>The <strong>Sync</strong> tab is the main workflow:</p>
+<p>The dashboard has five flat tabs — <strong>Bulk Dispatch</strong>, <strong>Browse</strong>, <strong>Custom Dispatch</strong>, <strong>Manifest</strong>, and <strong>Maintenance</strong>. <strong>Bulk Dispatch</strong> is the main workflow:</p>
 <ol style="list-style-type: decimal">
 <li>The header bar shows all detected installations (highlighted in the source/target accent colours once selected)</li>
 <li>Select a <strong>source</strong> and a <strong>target</strong> R installation from the dropdowns in the sidebar. The target list is constrained to the same-or-newer R version than the source, since an older R can’t reliably hold packages built for a newer one.</li>
@@ -175,6 +175,7 @@
 <li>Click <strong>Ship</strong> — installs or upgrades the source’s packages into the target. To mirror two same-version installs, run the transfer again with source and target swapped.</li>
 </ol>
 <p>The comparison table lists unmatched and outdated packages first, ahead of packages that already match. Before a sync starts, the confirmation dialog shows an approximate time range based on the number of packages. During sync, the dashboard shows progress details and a log of the package list, completion state, and any failures. When sync finishes, courieR rescans both selected installations and refreshes the comparison automatically.</p>
+<p>The remaining tabs cover narrower workflows: <strong>Browse</strong> inspects any single detected installation’s package list, <strong>Custom Dispatch</strong> lets you cherry-pick individual packages to ship (with a side-by-side <strong>Source</strong>/<strong>Target</strong> table and its own log panel), <strong>Manifest</strong> reports an installation’s full inventory, and <strong>Maintenance</strong> restocks an installation from CRAN.</p>
 </div>
 <div class="section level2">
 <h2 id="cli-usage">CLI Usage<a class="anchor" aria-label="anchor" href="#cli-usage"></a>

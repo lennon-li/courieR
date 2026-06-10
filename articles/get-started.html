@@ -252,7 +252,7 @@ the plan internally, and runs it:</p>
 </h4>
 <p>By default, <code><a href="../reference/ship.html">ship()</a></code> only installs missing packages. Pass
 <code>upgrade = TRUE</code> to also update packages that are present but
-at an older version (mirrors what the Sync tab does):</p>
+at an older version (mirrors what the Bulk Dispatch tab does):</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/ship.html">ship</a></span><span class="op">(</span></span>
 <span>  source_path <span class="op">=</span> <span class="va">routes</span><span class="op">$</span><span class="va">rscript_path</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>,</span>
@@ -468,8 +468,9 @@ success or failure, and a post-sync comparison refresh.</li>
 </ol>
 <p>The first sync on a machine can take 1–2 minutes while pak builds its
 metadata cache. Subsequent syncs are faster.</p>
-<p>The Advanced tab exposes <code><a href="../reference/manifest.html">manifest()</a></code> output and lets you
-inspect any detected R installation’s full package list.</p>
+<p>The <strong>Browse</strong> and <strong>Manifest</strong> tabs expose
+<code><a href="../reference/manifest.html">manifest()</a></code> output and let you inspect any detected R
+installation’s full package list.</p>
 <hr>
 </div>
 <div class="section level2">

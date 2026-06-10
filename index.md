@@ -60,9 +60,11 @@ of whether admin rights were used:
 | [`inventory()`](https://lennon-li.github.io/courieR/reference/inventory.md) | Compare two package libraries |
 | [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) | Full-control migration (custom paths, callbacks) |
 
-## Dashboard — Sync Tab
+## Dashboard — Bulk Dispatch
 
-The **Sync** tab is the main workflow:
+The dashboard has five flat tabs — **Bulk Dispatch**, **Browse**,
+**Custom Dispatch**, **Manifest**, and **Maintenance**. **Bulk
+Dispatch** is the main workflow:
 
 1.  The header bar shows all detected installations (highlighted in the
     source/target accent colours once selected)
@@ -83,6 +85,13 @@ During sync, the dashboard shows progress details and a log of the
 package list, completion state, and any failures. When sync finishes,
 courieR rescans both selected installations and refreshes the comparison
 automatically.
+
+The remaining tabs cover narrower workflows: **Browse** inspects any
+single detected installation’s package list, **Custom Dispatch** lets
+you cherry-pick individual packages to ship (with a side-by-side
+**Source**/**Target** table and its own log panel), **Manifest** reports
+an installation’s full inventory, and **Maintenance** restocks an
+installation from CRAN.
 
 ## CLI Usage
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## courieR (development version)
+
+### Dashboard UX
+
+- Flattened the dashboard navigation from three nested tab levels to a
+  single row of five top-level tabs: **Bulk Dispatch**, **Browse**,
+  **Custom Dispatch**, **Manifest**, and **Maintenance**. The former
+  **Advanced** wrapper tab is gone.
+- Renamed **Dispatch** → **Bulk Dispatch**, and the former **Ship**
+  sub-tab is now the top-level **Custom Dispatch** tab.
+- **Custom Dispatch** now uses a two-pane layout — the package table on
+  the left and a live log panel (with a delivery receipt) on the right —
+  mirroring Bulk Dispatch. Its comparison columns are labelled
+  **Source** / **Target** (was *Version A* / *Version B*), its filter
+  chips read “newer in source / newer in target / not in target / not in
+  source”, and the redundant `A → B` context bar was removed.
+
 ## courieR 0.3.0
 
 ### Bug fixes
