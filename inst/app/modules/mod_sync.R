@@ -803,8 +803,8 @@ mod_sync_server <- function(id,
           "Cherry-pick packages → ",
           tags$a(
             href    = "#",
-            onclick = "navigateToDepotShip(); return false;",
-            "Advanced › Depot › Ship"
+            onclick = "navigateToCustomDispatch(); return false;",
+            "Custom Dispatch"
           )
         )
       } else NULL

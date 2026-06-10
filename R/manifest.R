@@ -43,7 +43,7 @@ manifest <- function(rscript_path = NULL, lib_path = NULL, format = c("data.tabl
   # Strip the *parent* R session's library/home env vars before launching the
   # target R. Otherwise processx inherits R_LIBS_USER / R_HOME from the R that
   # is running courieR, and the target R reports the parent's library instead of
-  # its own — making every installation appear to share one library. The target
+  # its own - making every installation appear to share one library. The target
   # R still reads its own .Renviron/.Rprofile, so user-configured paths survive.
   child_env <- (function() {
     cur  <- Sys.getenv()

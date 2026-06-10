@@ -166,7 +166,7 @@ print(result$plan)
 
 #### Include version upgrades
 
-By default, `ship()` only installs missing packages. Pass `upgrade = TRUE` to also update packages that are present but at an older version (mirrors what the Sync tab does):
+By default, `ship()` only installs missing packages. Pass `upgrade = TRUE` to also update packages that are present but at an older version (mirrors what the Bulk Dispatch tab does):
 
 ```{r}
 result <- ship(
@@ -330,7 +330,7 @@ hub()
 <!-- NOTE: this screenshot predates the source/target rename (it shows the old
      "first/second installation" pickers and the removed sync-direction selector).
      A human should refresh figures/sync-tab.png to match the current UI. -->
-```{r sync-screenshot, echo=FALSE, out.width="100%", fig.cap="The Sync tab: pick a source and a target R installation, compare their libraries, and ship packages from source into target. The log pane on the right shows real-time progress."}
+```{r sync-screenshot, echo=FALSE, out.width="100%", fig.cap="The Bulk Dispatch tab: pick a source and a target R installation, compare their libraries, and ship packages from source into target. The log pane on the right shows real-time progress."}
 img <- "figures/sync-tab.png"
 if (file.exists(img)) knitr::include_graphics(img)
 ```
@@ -346,7 +346,7 @@ if (file.exists(img)) knitr::include_graphics(img)
 
 The first sync on a machine can take 1–2 minutes while pak builds its metadata cache. Subsequent syncs are faster.
 
-The Advanced tab exposes `manifest()` output and lets you inspect any detected R installation's full package list.
+The **Browse** and **Manifest** tabs expose `manifest()` output and let you inspect any detected R installation's full package list.
 
 ---
 

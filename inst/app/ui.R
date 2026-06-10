@@ -36,13 +36,9 @@ ui <- bslib::page_navbar(
              }), {priority: 'event'});
            }
          }
-         function navigateToDepotShip() {
-           var advTab = document.querySelector('[data-value=\"Advanced\"]');
-           if (advTab) advTab.click();
-           setTimeout(function() {
-             var shipTab = document.querySelector('[data-value=\"Ship\"]');
-             if (shipTab) shipTab.click();
-           }, 150);
+         function navigateToCustomDispatch() {
+           var tab = document.querySelector('[data-value=\"Custom Dispatch\"]');
+           if (tab) tab.click();
          }"
       ))
     ),
@@ -50,33 +46,35 @@ ui <- bslib::page_navbar(
   ),
 
   bslib::nav_panel(
-    "Dispatch",
+    "Bulk Dispatch",
     mod_sync_ui("sync")
   ),
 
   bslib::nav_panel(
+    "Browse",
+    div(class = "advanced-pane advanced-depot", mod_origin_browse_ui("env"))
+  ),
+
+  bslib::nav_panel(
     title = tagList(
-      "Advanced",
-      uiOutput("advanced_badge", inline = TRUE)
+      "Custom Dispatch",
+      uiOutput("custom_dispatch_badge", inline = TRUE)
     ),
-    value = "Advanced",
-    bslib::navset_card_tab(
-      bslib::nav_panel(
-        "Depot",
-        div(class = "advanced-pane advanced-depot", mod_origin_ui("env"))
-      ),
-      bslib::nav_panel(
-        "Manifest",
-        div(class = "advanced-pane advanced-manifest", mod_manifest_ui("report"))
-      ),
-      bslib::nav_panel(
-        "Maintenance",
-        div(class = "advanced-pane advanced-maintenance",
-            bslib::card(
-              bslib::card_header("Restock"),
-              bslib::card_body(mod_sync_maintenance_ui("sync"))
-            ))
-      )
-    )
+    value = "Custom Dispatch",
+    div(class = "advanced-pane", mod_origin_ship_ui("env"))
+  ),
+
+  bslib::nav_panel(
+    "Manifest",
+    div(class = "advanced-pane advanced-manifest", mod_manifest_ui("report"))
+  ),
+
+  bslib::nav_panel(
+    "Maintenance",
+    div(class = "advanced-pane advanced-maintenance",
+        bslib::card(
+          bslib::card_header("Restock"),
+          bslib::card_body(mod_sync_maintenance_ui("sync"))
+        ))
   )
 )

@@ -58,45 +58,53 @@ mod_depot_ship_ui <- function(id) {
        }"
     )),
 
-    # Zone 1 — context bar
-    uiOutput(ns("context_bar")),
-
-    # Zone 2 — filters + search/mode toolbar + table
+    # Filter chips span the full width above the workspace
     uiOutput(ns("ship_chips")),
+
     div(
-      class = "depot-ship-toolbar",
-      textInput(ns("ship_search"), label = NULL,
-                placeholder = "Search packages…", width = "220px"),
+      class = "sync-workspace",
+
+      # Left pane — toolbar + table + plan summary + ship button
       div(
-        class = "depot-ship-bulk",
-        tags$span(class = "depot-ship-mode-label", "How to ship:"),
-        selectInput(
-          ns("ship_mode"), label = NULL,
-          choices  = c("Install online" = "online", "Ship as-is" = "ship"),
-          selected = "online",
-          selectize = FALSE,
-          width = "150px"
+        class = "sync-comparison-pane",
+        div(
+          class = "depot-ship-toolbar",
+          textInput(ns("ship_search"), label = NULL,
+                    placeholder = "Search packages…", width = "220px"),
+          div(
+            class = "depot-ship-bulk",
+            tags$span(class = "depot-ship-mode-label", "How to ship:"),
+            selectInput(
+              ns("ship_mode"), label = NULL,
+              choices  = c("Install online" = "online", "Ship as-is" = "ship"),
+              selected = "online",
+              selectize = FALSE,
+              width = "150px"
+            ),
+            actionButton(ns("select_all"), "Select all shown",
+                         class = "btn btn-sm depot-select-all-btn",
+                         onclick = sprintf("courierDepotSelectAll('%s', true)", ns("ship_table"))),
+            actionButton(ns("clear_sel"), "Clear",
+                         class = "btn btn-sm depot-clear-sel-btn",
+                         onclick = sprintf("courierDepotSelectAll('%s', false)", ns("ship_table")))
+          )
         ),
-        actionButton(ns("select_all"), "Select all shown",
-                     class = "btn btn-sm depot-select-all-btn",
-                     onclick = sprintf("courierDepotSelectAll('%s', true)", ns("ship_table"))),
-        actionButton(ns("clear_sel"), "Clear",
-                     class = "btn btn-sm depot-clear-sel-btn",
-                     onclick = sprintf("courierDepotSelectAll('%s', false)", ns("ship_table")))
+        DT::dataTableOutput(ns("ship_table")),
+        uiOutput(ns("plan_summary")),
+        div(
+          class = "depot-ship-footer",
+          actionButton(ns("depot_ship_btn"), "Ship",
+                       class = "btn sync-compare-btn depot-ship-execute-btn",
+                       onclick = "if(window.courierStartTimer) window.courierStartTimer();")
+        )
+      ),
+
+      # Right pane — log
+      div(
+        class = "sync-log-pane",
+        uiOutput(ns("depot_log_ui"))
       )
-    ),
-    DT::dataTableOutput(ns("ship_table")),
-
-    # Zone 3 — plan summary + ship
-    uiOutput(ns("plan_summary")),
-    div(
-      class = "depot-ship-footer",
-      actionButton(ns("depot_ship_btn"), "Ship",
-                   class = "btn sync-compare-btn depot-ship-execute-btn")
-    ),
-
-    # Post-ship inline receipt
-    uiOutput(ns("depot_receipt"))
+    )
   )
 }
 
@@ -118,6 +126,11 @@ mod_depot_ship_server <- function(id,
     ship_filter_status   <- reactiveVal(NULL)  # NULL = all diff statuses shown
     depot_ship_result    <- reactiveVal(NULL)
     shipping_in_progress <- reactiveVal(FALSE)
+    depot_log <- reactiveVal(character(0))
+    depot_log_append <- function(...) {
+      msg <- paste0(...)
+      depot_log(utils::tail(c(isolate(depot_log()), msg), 1000L))
+    }
 
     get_direction <- function() {
       if (is.function(sync_direction_rv)) sync_direction_rv() else "A_to_B"
@@ -167,38 +180,6 @@ mod_depot_ship_server <- function(id,
       }, ignoreNULL = TRUE)
     }
 
-    # ── Context bar ────────────────────────────────────────────────────────
-    output$context_bar <- renderUI({
-      comp <- get_comp()
-      if (is.null(comp)) {
-        return(div(
-          class = "depot-ship-context-bar depot-ship-context-empty",
-          tags$span("Run Compare in Dispatch first to load packages.")
-        ))
-      }
-      dir  <- get_direction()
-      mode <- get_mode()
-      from <- if (is.function(from_r_path)) from_r_path() else NULL
-      to   <- if (is.function(to_r_path))   to_r_path()   else NULL
-
-      dir_label <- switch(dir,
-        A_to_B = "→ B",
-        B_to_A = "← A",
-        full   = "Two-way",
-        dir
-      )
-      div(
-        class = "depot-ship-context-bar",
-        tags$span(class = "depot-ship-context-item",
-          tags$strong("A: "), tags$code(basename(dirname(dirname(from %||% ""))))),
-        tags$span(class = "depot-ship-context-sep", dir_label),
-        tags$span(class = "depot-ship-context-item",
-          tags$strong("B: "), tags$code(basename(dirname(dirname(to %||% ""))))),
-        tags$span(class = "depot-ship-context-mode",
-          tags$strong("Mode: "), mode)
-      )
-    })
-
     # ── Chip filters ───────────────────────────────────────────────────────
     output$ship_chips <- renderUI({
       comp <- get_comp()
@@ -221,11 +202,11 @@ mod_depot_ship_server <- function(id,
       }
       div(
         class = "sync-summary-bar",
-        make_chip("same",           "identical",  "chip-same"),
-        make_chip("newer-in-A",     "newer in A", "chip-diff-a"),
-        make_chip("newer-in-B",     "newer in B", "chip-diff-b"),
-        make_chip("missing-from-B", "not in B",   "chip-diff-a"),
-        make_chip("missing-from-A", "not in A",   "chip-diff-b")
+        make_chip("same",           "identical",        "chip-same"),
+        make_chip("newer-in-A",     "newer in source",  "chip-diff-a"),
+        make_chip("newer-in-B",     "newer in target",  "chip-diff-b"),
+        make_chip("missing-from-B", "not in target",    "chip-diff-a"),
+        make_chip("missing-from-A", "not in source",    "chip-diff-b")
       )
     })
 
@@ -251,7 +232,7 @@ mod_depot_ship_server <- function(id,
     empty_ship_dt <- function() {
       DT::datatable(
         data.frame(` ` = character(), Package = character(),
-                   `Version A` = character(), `Version B` = character(),
+                   Source = character(), Target = character(),
                    Status = character(),
                    check.names = FALSE),
         rownames  = FALSE,
@@ -272,13 +253,13 @@ mod_depot_ship_server <- function(id,
         character(1))
 
       display <- data.frame(
-        ` `        = cbs,
-        Package    = pkgs,
-        `Version A` = ifelse(is.na(visible[["version_in_a"]]),
-                              "not installed", visible[["version_in_a"]]),
-        `Version B` = ifelse(is.na(visible[["version_in_b"]]),
-                              "not installed", visible[["version_in_b"]]),
-        Status     = visible[["status"]],
+        ` `     = cbs,
+        Package = pkgs,
+        Source  = ifelse(is.na(visible[["version_in_a"]]),
+                         "not installed", visible[["version_in_a"]]),
+        Target  = ifelse(is.na(visible[["version_in_b"]]),
+                         "not installed", visible[["version_in_b"]]),
+        Status  = visible[["status"]],
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
@@ -394,6 +375,7 @@ mod_depot_ship_server <- function(id,
 
       total <- sum(sapply(batches, function(b) length(b$pkgs)))
       depot_ship_result(NULL)
+      depot_log(character(0))
       shipping_in_progress(TRUE)
       on.exit(shipping_in_progress(FALSE), add = TRUE)
       start <- Sys.time()
@@ -420,9 +402,13 @@ mod_depot_ship_server <- function(id,
             all_results[[i]] <- res$results
           if (!is.null(res$plan) && nrow(res$plan) > 0L)
             all_plans[[i]] <- res$plan
+          depot_log_append(sprintf("Shipped %d package(s) [%s] → %s",
+                                   length(b$pkgs), b$mode,
+                                   basename(dirname(dirname(b$tgt)))))
         }
         TRUE
       }, error = function(e) {
+        depot_log_append("[ERR] ", e$message)
         showNotification(paste("Ship failed:", e$message),
                          type = "error", duration = NULL)
         if (is.function(push_error))
@@ -433,6 +419,7 @@ mod_depot_ship_server <- function(id,
       removeNotification("depot-ship-busy")
 
       elapsed <- as.numeric(difftime(Sys.time(), start, units = "secs"))
+      depot_log_append(sprintf("Done — %d package(s) in %.0fs.", total, elapsed))
       combined_results <- if (length(all_results) > 0L)
         data.table::rbindlist(all_results, fill = TRUE)
       else
@@ -461,37 +448,81 @@ mod_depot_ship_server <- function(id,
       }
     })
 
-    # ── Inline receipt after depot ship ────────────────────────────────────
-    output$depot_receipt_dt <- DT::renderDataTable({
-      res <- depot_ship_result()
-      if (is.null(res) || is.null(res$results) || nrow(res$results) == 0)
-        return(DT::datatable(data.frame(), options = list(dom = "t"), rownames = FALSE))
-      DT::datatable(res$results,
-        options = list(pageLength = 15, dom = "tip"), rownames = FALSE)
-    })
+    # ── Log pane (mirrors Bulk Dispatch) ───────────────────────────────────
+    format_depot_log <- function(entry) {
+      if (startsWith(entry, "[ERR] ")) {
+        clean <- htmltools::htmlEscape(substr(entry, 7L, nchar(entry)))
+        sprintf('<span class="sync-log-error">%s</span>', clean)
+      } else {
+        htmltools::htmlEscape(entry)
+      }
+    }
 
-    output$depot_receipt <- renderUI({
-      res <- depot_ship_result()
-      if (is.null(res)) return(NULL)
+    output$depot_log_ui <- renderUI({
+      entries <- depot_log()
+      active  <- shipping_in_progress()
+      res     <- depot_ship_result()
 
-      results <- res$results
-      n_total <- if (!is.null(results)) nrow(results) else 0L
-      n_ok    <- if (!is.null(results)) sum(results$status == "success") else 0L
-      n_err   <- n_total - n_ok
-      theme   <- if (n_total == 0L) "secondary" else if (n_err == 0L) "success" else if (n_ok == 0L) "danger" else "warning"
+      progress_ui <- if (active) {
+        tags$div(
+          class = "sync-inline-progress",
+          tags$div(class = "sync-progress-label", "Shipping…"),
+          tags$div(
+            class = "progress",
+            tags$div(
+              class = "progress-bar progress-bar-striped progress-bar-animated",
+              role = "progressbar",
+              style = "width: 100%;",
+              `aria-valuenow` = "100",
+              `aria-valuemin` = "0",
+              `aria-valuemax` = "100"
+            )
+          )
+        )
+      } else {
+        NULL
+      }
 
-      bslib::card(
-        class = "sync-receipt-card",
-        bslib::card_header("Delivery Receipt"),
-        bslib::card_body(
-          bslib::value_box(
-            "Result",
-            sprintf("%d / %d packages delivered", n_ok, n_total),
-            sprintf("%.1fs", res$elapsed_sec %||% 0),
-            theme = theme
-          ),
-          if (n_total > 0L) {
-            DT::dataTableOutput(ns("depot_receipt_dt"))
+      receipt_ui <- if (!is.null(res)) {
+        results <- res$results
+        n_total <- if (!is.null(results)) nrow(results) else 0L
+        n_ok    <- if (!is.null(results)) sum(results$status == "success") else 0L
+        theme   <- if (n_total == 0L) "secondary"
+                   else if (n_ok == n_total) "success"
+                   else if (n_ok == 0L) "danger" else "warning"
+        bslib::value_box(
+          "Delivery Receipt",
+          sprintf("%d / %d packages delivered", n_ok, n_total),
+          sprintf("%.1fs", res$elapsed_sec %||% 0),
+          theme = theme
+        )
+      } else {
+        NULL
+      }
+
+      empty_text <- "Check packages, then press Ship. Activity appears here."
+      tags$div(
+        class = paste("sync-log", if (length(entries) == 0) "sync-log-empty" else ""),
+        tags$div(
+          class = "sync-log-title",
+          "Log panel",
+          tags$span(
+            class = "sync-log-subtitle",
+            if (length(entries) == 0) "Waiting for activity" else "Ship actions and delivery results"
+          )
+        ),
+        progress_ui,
+        receipt_ui,
+        tags$pre(
+          id = ns("depot_log_pre"),
+          `data-empty` = if (length(entries) == 0) "true" else NULL,
+          if (length(entries) == 0) {
+            empty_text
+          } else {
+            HTML(paste(
+              vapply(rev(utils::tail(entries, 250)), format_depot_log, character(1)),
+              collapse = "\n"
+            ))
           }
         )
       )

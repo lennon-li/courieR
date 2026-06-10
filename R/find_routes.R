@@ -16,7 +16,7 @@
 #'     \item{home}{Character. The installation directory (`R.home()`), i.e. where
 #'       this R is installed. Normalized lexically for comparison.}
 #'     \item{library}{Character. The installation's primary library location
-#'       (`.libPaths()[1]` under a vanilla session) — where `install.packages()`
+#'       (`.libPaths()[1]` under a vanilla session) - where `install.packages()`
 #'       writes by default. This is the effective package store; two installs
 #'       that share a `library` hold the same packages. Normalized lexically for
 #'       comparison. `NA` if it could not be determined.}
@@ -28,35 +28,35 @@
 #'
 #' **Windows**
 #' \itemize{
-#'   \item HKLM registry (`SOFTWARE\R-core\R`) — standard admin installs via
+#'   \item HKLM registry (`SOFTWARE\R-core\R`) - standard admin installs via
 #'     the CRAN Windows installer.
-#'   \item HKCU registry (`SOFTWARE\R-core\R`) — non-admin installs that
+#'   \item HKCU registry (`SOFTWARE\R-core\R`) - non-admin installs that
 #'     register under the current user hive only.
-#'   \item `%ProgramFiles%\R` — directory scan for admin installs not in the
+#'   \item `%ProgramFiles%\R` - directory scan for admin installs not in the
 #'     registry.
-#'   \item `%LOCALAPPDATA%\Programs\R` — rig-managed and other user-local
+#'   \item `%LOCALAPPDATA%\Programs\R` - rig-managed and other user-local
 #'     installs.
-#'   \item `%USERPROFILE%\Documents\R` — installs placed in the user's
+#'   \item `%USERPROFILE%\Documents\R` - installs placed in the user's
 #'     Documents folder.
-#'   \item rig (`rig list`) — any additional versions managed by rig that
+#'   \item rig (`rig list`) - any additional versions managed by rig that
 #'     were not found by path scanning.
 #' }
 #'
 #' **macOS**
 #' \itemize{
-#'   \item `/Library/Frameworks/R.framework/Versions` — system-wide CRAN
+#'   \item `/Library/Frameworks/R.framework/Versions` - system-wide CRAN
 #'     installer.
-#'   \item `~/Library/Frameworks/R.framework/Versions` — user-local framework
+#'   \item `~/Library/Frameworks/R.framework/Versions` - user-local framework
 #'     installs (no admin required).
 #'   \item Homebrew: `/opt/homebrew/opt/r` (Apple Silicon) and
 #'     `/usr/local/opt/r` (Intel).
-#'   \item rig (`rig list`) — rig-managed versions.
+#'   \item rig (`rig list`) - rig-managed versions.
 #' }
 #'
 #' **Linux**
 #' \itemize{
-#'   \item `/opt/R` — rig system-wide installs.
-#'   \item `~/.local/share/rig/R` — rig user-local installs.
+#'   \item `/opt/R` - rig system-wide installs.
+#'   \item `~/.local/share/rig/R` - rig user-local installs.
 #'   \item conda environments (active `$CONDA_PREFIX`).
 #'   \item System `Rscript` on `$PATH`.
 #' }
@@ -127,7 +127,7 @@ find_routes <- function(search_paths = NULL) {
     }
 
     # User-local installs (no admin rights) default to ~/AppData/Local/Programs/R
-    # or ~/Documents/R — check both
+    # or ~/Documents/R - check both
     local_prog <- fs::path(Sys.getenv("LOCALAPPDATA"), "Programs", "R")
     if (nzchar(Sys.getenv("LOCALAPPDATA")) && fs::dir_exists(local_prog)) {
       dirs <- fs::dir_ls(local_prog, type = "directory", fail = FALSE)

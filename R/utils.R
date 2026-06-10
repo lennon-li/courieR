@@ -28,7 +28,7 @@ depot_path <- function(project_path) {
 #' \itemize{
 #'   \item is the source itself;
 #'   \item resolves to the same `library` as the source (same package store, so
-#'     shipping there would change nothing) — this is the case two installs of
+#'     shipping there would change nothing) - this is the case two installs of
 #'     the same minor version usually fall into;
 #'   \item runs an older R than the source (an older R cannot reliably hold
 #'     packages built for / requiring a newer R).

@@ -57,9 +57,11 @@ R 4.4.1  ──▶  compare()  ──▶  missing / outdated packages found
 | `inventory()` | Compare two package libraries |
 | `ship()` | Full-control migration (custom paths, callbacks) |
 
-## Dashboard — Sync Tab
+## Dashboard — Bulk Dispatch
 
-The **Sync** tab is the main workflow:
+The dashboard has five flat tabs — **Bulk Dispatch**, **Browse**, **Custom
+Dispatch**, **Manifest**, and **Maintenance**. **Bulk Dispatch** is the main
+workflow:
 
 1. The header bar shows all detected installations (highlighted in the source/target accent colours once selected)
 2. Select a **source** and a **target** R installation from the dropdowns in the sidebar. The target list is constrained to the same-or-newer R version than the source, since an older R can't reliably hold packages built for a newer one.
@@ -72,6 +74,12 @@ approximate time range based on the number of packages. During sync, the dashboa
 shows progress details and a log of the package list, completion state,
 and any failures. When sync finishes, courieR rescans both selected installations
 and refreshes the comparison automatically.
+
+The remaining tabs cover narrower workflows: **Browse** inspects any single
+detected installation's package list, **Custom Dispatch** lets you cherry-pick
+individual packages to ship (with a side-by-side **Source**/**Target** table and
+its own log panel), **Manifest** reports an installation's full inventory, and
+**Maintenance** restocks an installation from CRAN.
 
 ## CLI Usage
 
