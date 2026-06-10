@@ -214,7 +214,7 @@ mod_origin_server <- function(id,
                      !(pkgs$priority %in% c("base", "recommended")), ]
       pkg_name <- pkgs$package[selected[[1]]]
       actionButton(
-        ns("view_in_ship"), sprintf("View '%s' in Ship", pkg_name),
+        ns("view_in_ship"), sprintf("View '%s' in Custom Dispatch", pkg_name),
         class = "btn btn-sm browse-to-ship-btn"
       )
     })
