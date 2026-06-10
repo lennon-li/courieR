@@ -263,7 +263,7 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
       rep(NA_character_, nrow(plan))
     }
 
-    # online mode: let pak resolve compatible versions — pinning old exact
+    # online mode: let pak resolve compatible versions - pinning old exact
     # versions from a different R installation causes the solver to fail.
     # Must use a list of NULLs (not NA_character_) so wrap() sees is.null(version) == TRUE.
     version_for_spec <- if (mode == "online") vector("list", nrow(plan)) else plan$version.x
@@ -297,15 +297,15 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
     target_lib <- find_target_lib(target_path)
 
     # Avoid recompiling/redownloading wherever it is safe:
-    #   * Pure-R packages (no compiled code) are ABI-independent — copy them
+    #   * Pure-R packages (no compiled code) are ABI-independent - copy them
     #     directly from the source library, even across R versions. No download,
     #     no compile.
-    #   * Local/private packages (source "unknown") can't be fetched online —
+    #   * Local/private packages (source "unknown") can't be fetched online  - 
     #     copy them too (also keeps one un-findable package from poisoning pak's
     #     atomic solve).
     #   * Only packages that are BOTH resolvable online AND have compiled code
     #     go through pak, which must rebuild them for the target R (binary
-    #     preferred — see .run_pak_plan).
+    #     preferred - see .run_pak_plan).
     plan_meta  <- .copy_plan(plan)
     compiled   <- plan_meta$compiled[match(plan$package, plan_meta$package)]
     compiled[is.na(compiled)] <- FALSE
@@ -317,7 +317,7 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
 
     if (nrow(copy_plan_all) > 0 && is.function(log_callback)) {
       try(log_callback(sprintf(
-        "Copying %d package(s) directly from the source library (pure-R or local — no rebuild needed): %s",
+        "Copying %d package(s) directly from the source library (pure-R or local - no rebuild needed): %s",
         nrow(copy_plan_all), paste(copy_plan_all$package, collapse = ", ")
       )), silent = TRUE)
     }
