@@ -129,7 +129,7 @@ mod_depot_ship_server <- function(id,
     depot_log <- reactiveVal(character(0))
     depot_log_append <- function(...) {
       msg <- paste0(...)
-      depot_log(c(depot_log(), msg))
+      depot_log(utils::tail(c(isolate(depot_log()), msg), 1000L))
     }
 
     get_direction <- function() {
