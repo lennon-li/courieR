@@ -3,9 +3,9 @@
 #
 # actions   named character vector: package -> "skip" | "ship" | "online"
 # comp      data.frame/data.table with columns: package, status
-# direction one of "A_to_B", "B_to_A", "full"
-# from_path Rscript path for installation A
-# to_path   Rscript path for installation B
+# direction one of "source_to_target", "target_to_source", "full"
+# from_path Rscript path for source installation
+# to_path   Rscript path for target installation
 .build_depot_ship_batches <- function(actions, comp, direction, from_path, to_path) {
   non_skip <- names(actions)[actions != "skip"]
   if (length(non_skip) == 0L) return(list())
@@ -16,14 +16,14 @@
   )
 
   if (direction == "full") {
-    a_to_b <- non_skip[status_map[non_skip] %in% c("missing-from-B", "newer-in-A")]
-    b_to_a <- non_skip[status_map[non_skip] %in% c("missing-from-A", "newer-in-B")]
-  } else if (direction == "A_to_B") {
-    a_to_b <- non_skip
-    b_to_a <- character(0)
+    src_to_tgt <- non_skip[status_map[non_skip] %in% c("missing-from-target", "newer-in-source")]
+    tgt_to_src <- non_skip[status_map[non_skip] %in% c("missing-from-source", "newer-in-target")]
+  } else if (direction == "source_to_target") {
+    src_to_tgt <- non_skip
+    tgt_to_src <- character(0)
   } else {
-    a_to_b <- character(0)
-    b_to_a <- non_skip
+    src_to_tgt <- character(0)
+    tgt_to_src <- non_skip
   }
 
   batches <- list()
@@ -34,10 +34,10 @@
                                               tgt = tgt, mode = mode)
   }
 
-  add_batch(a_to_b[actions[a_to_b] == "online"], from_path, to_path, "online")
-  add_batch(a_to_b[actions[a_to_b] == "ship"],   from_path, to_path, "offline")
-  add_batch(b_to_a[actions[b_to_a] == "online"], to_path, from_path, "online")
-  add_batch(b_to_a[actions[b_to_a] == "ship"],   to_path, from_path, "offline")
+  add_batch(src_to_tgt[actions[src_to_tgt] == "online"], from_path, to_path, "online")
+  add_batch(src_to_tgt[actions[src_to_tgt] == "ship"],   from_path, to_path, "offline")
+  add_batch(tgt_to_src[actions[tgt_to_src] == "online"], to_path, from_path, "online")
+  add_batch(tgt_to_src[actions[tgt_to_src] == "ship"],   to_path, from_path, "offline")
 
   batches
 }
@@ -47,16 +47,38 @@ mod_depot_ship_ui <- function(id) {
   div(
     class = "depot-ship-pane",
 
-    # Small JS helper: check/uncheck every visible row checkbox and notify Shiny.
-    tags$script(HTML(
+    # Small JS helpers: checkbox select-all + elapsed timer.
+    tags$script(HTML(sprintf(
       "function courierDepotSelectAll(tableId, checked){
          var root = document.getElementById(tableId);
          if(!root) return;
          var cbs = root.querySelectorAll('.depot-ship-cb');
          cbs.forEach(function(c){ c.checked = checked; });
          if(cbs.length){ cbs[0].dispatchEvent(new Event('change', {bubbles:true})); }
-       }"
-    )),
+       }
+       (function(){
+         var _iv = null, _t0 = null;
+         window.courierStartTimer = function() {
+           var el = document.getElementById('%s');
+           if (!el) return;
+           _t0 = Date.now();
+           el.style.display = 'inline';
+           el.textContent = '0s elapsed';
+           clearInterval(_iv);
+           _iv = setInterval(function() {
+             var s = Math.floor((Date.now() - _t0) / 1000);
+             var m = Math.floor(s / 60);
+             el.textContent = (m > 0 ? m + 'm ' + (s %% 60) + 's' : s + 's') + ' elapsed';
+           }, 1000);
+         };
+         $(document).on('shiny:idle', function() {
+           if (_iv) { clearInterval(_iv); _iv = null; }
+           var el = document.getElementById('%s');
+           if (el) el.style.display = 'none';
+         });
+       })();",
+      ns("depot_timer"), ns("depot_timer")
+    ))),
 
     # Filter chips span the full width above the workspace
     uiOutput(ns("ship_chips")),
@@ -95,7 +117,8 @@ mod_depot_ship_ui <- function(id) {
           class = "depot-ship-footer",
           actionButton(ns("depot_ship_btn"), "Ship",
                        class = "btn sync-compare-btn depot-ship-execute-btn",
-                       onclick = "if(window.courierStartTimer) window.courierStartTimer();")
+                       onclick = "if(window.courierStartTimer) window.courierStartTimer();"),
+          tags$span(id = ns("depot_timer"), class = "depot-ship-timer", style = "display:none;")
         )
       ),
 
@@ -133,7 +156,7 @@ mod_depot_ship_server <- function(id,
     }
 
     get_direction <- function() {
-      if (is.function(sync_direction_rv)) sync_direction_rv() else "A_to_B"
+      if (is.function(sync_direction_rv)) sync_direction_rv() else "source_to_target"
     }
     get_mode <- function() {
       if (is.function(transfer_mode_rv)) transfer_mode_rv() else "online"
@@ -164,7 +187,7 @@ mod_depot_ship_server <- function(id,
     observeEvent(get_comp(), {
       comp <- get_comp()
       if (is.null(comp) || nrow(comp) == 0) return()
-      ship_filter_status(c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B"))
+      ship_filter_status(c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target"))
       depot_ship_result(NULL)
       mode_default <- switch(get_mode(), offline = "ship", preserve = "ship", "online")
       updateSelectInput(session, "ship_mode", selected = mode_default)
@@ -203,10 +226,10 @@ mod_depot_ship_server <- function(id,
       div(
         class = "sync-summary-bar",
         make_chip("same",           "identical",        "chip-same"),
-        make_chip("newer-in-A",     "newer in source",  "chip-diff-a"),
-        make_chip("newer-in-B",     "newer in target",  "chip-diff-b"),
-        make_chip("missing-from-B", "not in target",    "chip-diff-a"),
-        make_chip("missing-from-A", "not in source",    "chip-diff-b")
+        make_chip("newer-in-source",     "newer in source",  "chip-diff-a"),
+        make_chip("newer-in-target",     "newer in target",  "chip-diff-b"),
+        make_chip("missing-from-target", "not in target",    "chip-diff-a"),
+        make_chip("missing-from-source", "not in source",    "chip-diff-b")
       )
     })
 
@@ -255,10 +278,10 @@ mod_depot_ship_server <- function(id,
       display <- data.frame(
         ` `     = cbs,
         Package = pkgs,
-        Source  = ifelse(is.na(visible[["version_in_a"]]),
-                         "not installed", visible[["version_in_a"]]),
-        Target  = ifelse(is.na(visible[["version_in_b"]]),
-                         "not installed", visible[["version_in_b"]]),
+        Source  = ifelse(is.na(visible[["version_in_source"]]),
+                         "not installed", visible[["version_in_source"]]),
+        Target  = ifelse(is.na(visible[["version_in_target"]]),
+                         "not installed", visible[["version_in_target"]]),
         Status  = visible[["status"]],
         check.names = FALSE,
         stringsAsFactors = FALSE
@@ -274,7 +297,7 @@ mod_depot_ship_server <- function(id,
         options   = list(
           dom        = "t",
           pageLength = -1,
-          scrollY    = "400px",
+          scrollY    = "600px",
           scrollCollapse = TRUE,
           columnDefs = list(list(
             targets   = 0,
@@ -302,7 +325,7 @@ mod_depot_ship_server <- function(id,
         DT::formatStyle(
           "Status",
           backgroundColor = DT::styleEqual(
-            c("same",    "missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B"),
+            c("same",    "missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target"),
             c("#ffffff", "#fff6ef",        "#eefafb",        "#fff4ea",    "#edf8fb")
           )
         )
@@ -380,8 +403,17 @@ mod_depot_ship_server <- function(id,
       on.exit(shipping_in_progress(FALSE), add = TRUE)
       start <- Sys.time()
 
+      depot_log_append("─────── Ship ───────")
+      for (b in batches) {
+        pkg_preview <- paste(utils::head(b$pkgs, 6), collapse = ", ")
+        if (length(b$pkgs) > 6)
+          pkg_preview <- paste0(pkg_preview, sprintf(", +%d more", length(b$pkgs) - 6))
+        depot_log_append(sprintf("Shipping %d package(s) [%s]: %s", length(b$pkgs), b$mode, pkg_preview))
+      }
+      depot_log_append("Tip: real-time pak output streams to the R console — monitor there while this runs.")
+
       showNotification(
-        sprintf("Shipping %d package(s)… this may take a few minutes.", total),
+        sprintf("Shipping %d package(s)… watch the R console for real-time progress.", total),
         type = "message", duration = NULL, id = "depot-ship-busy"
       )
 
@@ -392,17 +424,18 @@ mod_depot_ship_server <- function(id,
         for (i in seq_along(batches)) {
           b <- batches[[i]]
           res <- courieR::ship(
-            source_path = b$src,
-            target_path = b$tgt,
-            packages    = b$pkgs,
-            upgrade     = TRUE,
-            mode        = b$mode
+            source_path  = b$src,
+            target_path  = b$tgt,
+            packages     = b$pkgs,
+            upgrade      = TRUE,
+            mode         = b$mode,
+            log_callback = depot_log_append
           )
           if (!is.null(res$results) && nrow(res$results) > 0L)
             all_results[[i]] <- res$results
           if (!is.null(res$plan) && nrow(res$plan) > 0L)
             all_plans[[i]] <- res$plan
-          depot_log_append(sprintf("Shipped %d package(s) [%s] → %s",
+          depot_log_append(sprintf("Batch complete: %d package(s) [%s] → %s",
                                    length(b$pkgs), b$mode,
                                    basename(dirname(dirname(b$tgt)))))
         }
@@ -419,7 +452,7 @@ mod_depot_ship_server <- function(id,
       removeNotification("depot-ship-busy")
 
       elapsed <- as.numeric(difftime(Sys.time(), start, units = "secs"))
-      depot_log_append(sprintf("Done — %d package(s) in %.0fs.", total, elapsed))
+
       combined_results <- if (length(all_results) > 0L)
         data.table::rbindlist(all_results, fill = TRUE)
       else
@@ -430,6 +463,26 @@ mod_depot_ship_server <- function(id,
         data.table::rbindlist(all_plans, fill = TRUE)
       else
         data.table::data.table(package = character(), action = character())
+
+      if (ok) {
+        n_done <- nrow(combined_results)
+        if (n_done > 0L) {
+          ok_pkgs   <- combined_results$package[combined_results$status == "success"]
+          fail_pkgs <- combined_results$package[combined_results$status != "success"]
+          if (length(ok_pkgs) > 0L) {
+            preview <- paste(utils::head(ok_pkgs, 8), collapse = ", ")
+            if (length(ok_pkgs) > 8)
+              preview <- paste0(preview, sprintf(", +%d more", length(ok_pkgs) - 8))
+            depot_log_append(sprintf("Delivered: %s", preview))
+          }
+          if (length(fail_pkgs) > 0L)
+            depot_log_append(sprintf("[ERR] Failed: %s", paste(fail_pkgs, collapse = ", ")))
+          depot_log_append(sprintf("─── Done: %d/%d delivered in %.0fs ───",
+                                   length(ok_pkgs), n_done, elapsed))
+        } else {
+          depot_log_append(sprintf("─── Done: %d package(s) in %.0fs ───", total, elapsed))
+        }
+      }
 
       depot_ship_result(list(
         results     = combined_results,

@@ -34,17 +34,17 @@ mod_sync_ui <- function(id) {
       uiOutput(ns("detecting_msg")),
       uiOutput(ns("detected_installs")),
       div(
-        class = "sync-select-block sync-select-block-a",
+        class = "sync-select-block sync-select-block-source",
         tags$div(class = "sync-select-label", "Select source installation"),
-        selectInput(ns("install_a"), NULL, choices = character(0), selectize = FALSE),
-        uiOutput(ns("install_a_badge"))
+        selectInput(ns("install_source"), NULL, choices = character(0), selectize = FALSE),
+        uiOutput(ns("install_source_badge"))
       ),
       div(
-        class = "sync-select-block sync-select-block-b",
+        class = "sync-select-block sync-select-block-target",
         tags$div(class = "sync-select-label", "Select target installation"),
-        selectInput(ns("install_b"), NULL, choices = character(0), selectize = FALSE),
-        uiOutput(ns("install_b_target_hint")),
-        uiOutput(ns("install_b_badge"))
+        selectInput(ns("install_target"), NULL, choices = character(0), selectize = FALSE),
+        uiOutput(ns("install_target_hint")),
+        uiOutput(ns("install_target_badge"))
       ),
       actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn",
         onclick = "this.disabled=true; if(window.courierStartTimer) window.courierStartTimer();"),
@@ -100,16 +100,16 @@ mod_sync_maintenance_ui <- function(id) {
   ns <- NS(id)
   div(
     class = "sync-restock-wrap",
-    actionButton(ns("restock_a"), "Restock source from CRAN",
+    actionButton(ns("restock_source"), "Restock source from CRAN",
                  class = "btn sync-restock-btn"),
-    actionButton(ns("restock_b"), "Restock target from CRAN",
+    actionButton(ns("restock_target"), "Restock target from CRAN",
                  class = "btn sync-restock-btn")
   )
 }
 
 mod_sync_server <- function(id,
-                            install_a_path     = NULL,
-                            install_b_path     = NULL,
+                            install_source_path     = NULL,
+                            install_target_path     = NULL,
                             routes_cache       = NULL,
                             push_error         = NULL,
                             comparison_out     = NULL,
@@ -284,15 +284,15 @@ mod_sync_server <- function(id,
         return("no packages in comparison")
       }
 
-      statuses <- c("same", "missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+      statuses <- c("same", "missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
       counts <- table(factor(comp[["status"]], levels = statuses))
       sprintf(
-        "%d same, %d missing from B, %d missing from A, %d newer in A, %d newer in B",
+        "%d same, %d missing from target, %d missing from source, %d newer in source, %d newer in target",
         counts[["same"]],
-        counts[["missing-from-B"]],
-        counts[["missing-from-A"]],
-        counts[["newer-in-A"]],
-        counts[["newer-in-B"]]
+        counts[["missing-from-target"]],
+        counts[["missing-from-source"]],
+        counts[["newer-in-source"]],
+        counts[["newer-in-target"]]
       )
     }
 
@@ -426,34 +426,34 @@ mod_sync_server <- function(id,
         suffixes = c(".a", ".b")
       )
 
-      data.table::setnames(comp, c("version.a", "version.b"), c("version_in_a", "version_in_b"))
+      data.table::setnames(comp, c("version.a", "version.b"), c("version_in_source", "version_in_target"))
       if ("source.a" %in% names(comp)) {
-        data.table::setnames(comp, "source.a", "source_in_a")
+        data.table::setnames(comp, "source.a", "repo_in_source")
       }
       if ("source.b" %in% names(comp)) {
-        data.table::setnames(comp, "source.b", "source_in_b")
+        data.table::setnames(comp, "source.b", "repo_in_target")
       }
 
       status <- rep("same", nrow(comp))
-      missing_b <- is.na(comp[["version_in_b"]]) & !is.na(comp[["version_in_a"]])
-      missing_a <- is.na(comp[["version_in_a"]]) & !is.na(comp[["version_in_b"]])
-      status[missing_b] <- "missing-from-B"
-      status[missing_a] <- "missing-from-A"
+      missing_tgt <- is.na(comp[["version_in_target"]]) & !is.na(comp[["version_in_source"]])
+      missing_src <- is.na(comp[["version_in_source"]]) & !is.na(comp[["version_in_target"]])
+      status[missing_tgt] <- "missing-from-target"
+      status[missing_src] <- "missing-from-source"
 
-      both_present <- !is.na(comp[["version_in_a"]]) & !is.na(comp[["version_in_b"]])
+      both_present <- !is.na(comp[["version_in_source"]]) & !is.na(comp[["version_in_target"]])
       if (any(both_present)) {
-        ver_a <- package_version(comp[["version_in_a"]][both_present])
-        ver_b <- package_version(comp[["version_in_b"]][both_present])
+        ver_src <- package_version(comp[["version_in_source"]][both_present])
+        ver_tgt <- package_version(comp[["version_in_target"]][both_present])
         both_status <- rep("same", sum(both_present))
-        both_status[ver_a > ver_b] <- "newer-in-A"
-        both_status[ver_b > ver_a] <- "newer-in-B"
+        both_status[ver_src > ver_tgt] <- "newer-in-source"
+        both_status[ver_tgt > ver_src] <- "newer-in-target"
         status[both_present] <- both_status
       }
 
       data.table::set(comp, j = "status", value = status)
       status_rank <- match(
         comp[["status"]],
-        c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")
+        c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target", "same")
       )
       comp <- comp[order(status_rank, comp[["package"]]), ]
       comp[]
@@ -463,7 +463,7 @@ mod_sync_server <- function(id,
     # target. (Packages only in / newer in the target are never touched — the
     # transfer is one-directional.)
     packages_for_direction <- function(comp) {
-      comp[["package"]][comp[["status"]] %in% c("missing-from-B", "newer-in-A")]
+      comp[["package"]][comp[["status"]] %in% c("missing-from-target", "newer-in-source")]
     }
 
     # Build the single source → target ship() batch from a comparison.
@@ -621,32 +621,32 @@ mod_sync_server <- function(id,
       log_detection_summary(r)
       if (nrow(r) == 0) {
         showNotification("No R installations detected.", type = "warning")
-        updateSelectInput(session, "install_a", choices = character(0), selected = character(0))
-        updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_source", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_target", choices = character(0), selected = character(0))
       } else {
         choices <- route_choices(r)
 
-        current_a <- isolate(input$install_a)
-        current_b <- isolate(input$install_b)
+        current_src <- isolate(input$install_source)
+        current_tgt <- isolate(input$install_target)
 
         # Routes are sorted newest-first. Default source to the OLDEST install
         # and target to the newest — the common "carry packages up to my newest
         # R" case — so a valid same-or-newer target is always preselected (the
-        # target-filter observer then keeps install_b constrained to the source).
-        selected_a <- if (!is.null(current_a) && nzchar(current_a) && current_a %in% r$rscript_path) {
-          current_a
+        # target-filter observer then keeps install_target constrained to the source).
+        selected_src <- if (!is.null(current_src) && nzchar(current_src) && current_src %in% r$rscript_path) {
+          current_src
         } else {
           r$rscript_path[[nrow(r)]]
         }
 
-        selected_b <- if (!is.null(current_b) && nzchar(current_b) && current_b %in% r$rscript_path && !identical(current_b, selected_a)) {
-          current_b
+        selected_tgt <- if (!is.null(current_tgt) && nzchar(current_tgt) && current_tgt %in% r$rscript_path && !identical(current_tgt, selected_src)) {
+          current_tgt
         } else {
           r$rscript_path[[1]]
         }
 
-        updateSelectInput(session, "install_a", choices = choices, selected = selected_a)
-        updateSelectInput(session, "install_b", choices = choices, selected = selected_b)
+        updateSelectInput(session, "install_source", choices = choices, selected = selected_src)
+        updateSelectInput(session, "install_target", choices = choices, selected = selected_tgt)
       }
       detecting(FALSE)
     }
@@ -669,19 +669,19 @@ mod_sync_server <- function(id,
     }
 
 
-    output$install_a_badge <- renderUI({
-      a_version <- route_version(input$install_a)
+    output$install_source_badge <- renderUI({
+      src_version <- route_version(input$install_source)
       div(
-        class = "sync-install-meta sync-install-meta-a",
-        shiny::HTML(r_badge(a_version, "a"))
+        class = "sync-install-meta sync-install-meta-source",
+        shiny::HTML(r_badge(src_version, "source"))
       )
     })
 
-    output$install_b_badge <- renderUI({
-      b_version <- route_version(input$install_b)
+    output$install_target_badge <- renderUI({
+      tgt_version <- route_version(input$install_target)
       div(
-        class = "sync-install-meta sync-install-meta-b",
-        shiny::HTML(r_badge(b_version, "b"))
+        class = "sync-install-meta sync-install-meta-target",
+        shiny::HTML(r_badge(tgt_version, "target"))
       )
     })
 
@@ -714,8 +714,8 @@ mod_sync_server <- function(id,
       routes <- routes_data()
       if (nrow(routes) == 0) return(NULL)
 
-      sel_a   <- input$install_a
-      sel_b   <- input$install_b
+      sel_src <- input$install_source
+      sel_tgt <- input$install_target
       has_lib <- "library" %in% names(routes)
 
       # Libraries shared by more than one install (same package store).
@@ -732,8 +732,8 @@ mod_sync_server <- function(id,
         lapply(seq_len(nrow(routes)), function(i) {
           path <- routes$rscript_path[[i]]
           lib  <- if (has_lib) routes$library[[i]] else NA_character_
-          bucket <- if (!is.null(sel_a) && identical(path, sel_a)) "a"
-                    else if (!is.null(sel_b) && identical(path, sel_b)) "b"
+          bucket <- if (!is.null(sel_src) && identical(path, sel_src)) "source"
+                    else if (!is.null(sel_tgt) && identical(path, sel_tgt)) "target"
                     else ""
           extra_cls <- if (nzchar(bucket)) paste0("sidebar-install-", bucket) else ""
           is_shared <- !is.na(lib) && nzchar(lib) && lib %in% shared_libs
@@ -775,8 +775,8 @@ mod_sync_server <- function(id,
     output$comparison_summary <- renderUI({
       comp <- comparison_data()
       if (is.null(comp) || nrow(comp) == 0) return(NULL)
-      a_version <- route_version(input$install_a)
-      b_version <- route_version(input$install_b)
+      src_version <- route_version(input$install_source)
+      tgt_version <- route_version(input$install_target)
 
       counts <- table(comp[["status"]])
       filter_state <- selected_statuses()
@@ -792,10 +792,10 @@ mod_sync_server <- function(id,
         )
       }
 
-      a_lbl <- if (!is.na(a_version)) paste("newer in R", a_version) else "newer in A"
-      b_lbl <- if (!is.na(b_version)) paste("newer in R", b_version) else "newer in B"
-      na_lbl <- if (!is.na(a_version)) paste("not in R", a_version) else "missing from A"
-      nb_lbl <- if (!is.na(b_version)) paste("not in R", b_version) else "missing from B"
+      src_lbl <- if (!is.na(src_version)) paste("newer in R", src_version) else "newer in source"
+      tgt_lbl <- if (!is.na(tgt_version)) paste("newer in R", tgt_version) else "newer in target"
+      not_src_lbl <- if (!is.na(src_version)) paste("not in R", src_version) else "missing from source"
+      not_tgt_lbl <- if (!is.na(tgt_version)) paste("not in R", tgt_version) else "missing from target"
 
       hint_ui <- if (any(comp[["status"]] != "same")) {
         tags$p(
@@ -814,10 +814,10 @@ mod_sync_server <- function(id,
         div(
           class = "sync-summary-bar",
           make_chip("same",           "identical",  "chip-same"),
-          make_chip("newer-in-A",     a_lbl,        "chip-diff-a"),
-          make_chip("newer-in-B",     b_lbl,        "chip-diff-b"),
-          make_chip("missing-from-B", nb_lbl,       "chip-diff-a"),
-          make_chip("missing-from-A", na_lbl,       "chip-diff-b")
+          make_chip("newer-in-source",     src_lbl,      "chip-diff-source"),
+          make_chip("newer-in-target",     tgt_lbl,      "chip-diff-target"),
+          make_chip("missing-from-target", not_tgt_lbl,  "chip-diff-source"),
+          make_chip("missing-from-source", not_src_lbl,  "chip-diff-target")
         ),
         hint_ui
       )
@@ -889,16 +889,16 @@ mod_sync_server <- function(id,
     # No automatic detection on startup — the user clicks Detect (see observer
     # below), which calls load_routes() and shares the result via routes_cache.
 
-    observeEvent(input$install_a, {
-      if (is.function(install_a_path)) {
-        install_a_path(input$install_a)
+    observeEvent(input$install_source, {
+      if (is.function(install_source_path)) {
+        install_source_path(input$install_source)
       }
       comparison_data(NULL)
     }, ignoreNULL = FALSE)
 
-    observeEvent(input$install_b, {
-      if (is.function(install_b_path)) {
-        install_b_path(input$install_b)
+    observeEvent(input$install_target, {
+      if (is.function(install_target_path)) {
+        install_target_path(input$install_target)
       }
       comparison_data(NULL)
     }, ignoreNULL = FALSE)
@@ -907,23 +907,23 @@ mod_sync_server <- function(id,
     # the source changes (or installations are re-detected). Preserve the
     # current target if it is still eligible, otherwise pick the first valid one.
     observe({
-      src <- input$install_a
+      src <- input$install_source
       valid <- valid_targets(src)
       if (nrow(valid) == 0) {
-        updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_target", choices = character(0), selected = character(0))
         return()
       }
       choices <- route_choices(valid)
-      current_b <- isolate(input$install_b)
-      sel <- if (!is.null(current_b) && current_b %in% valid$rscript_path) current_b else valid$rscript_path[[1]]
-      updateSelectInput(session, "install_b", choices = choices, selected = sel)
+      current_tgt <- isolate(input$install_target)
+      sel <- if (!is.null(current_tgt) && current_tgt %in% valid$rscript_path) current_tgt else valid$rscript_path[[1]]
+      updateSelectInput(session, "install_target", choices = choices, selected = sel)
     })
 
     # Hint shown under the target dropdown when no eligible target exists. The
     # message distinguishes "there's only one R" from "others exist but were all
     # filtered out", so the user isn't told phantom installations were excluded.
-    output$install_b_target_hint <- renderUI({
-      src    <- input$install_a
+    output$install_target_hint <- renderUI({
+      src    <- input$install_source
       routes <- routes_data()
       if (is.null(src) || !nzchar(src) || nrow(routes) == 0) return(NULL)
       if (nrow(valid_targets(src)) > 0) return(NULL)
@@ -946,7 +946,7 @@ mod_sync_server <- function(id,
 
     # Direction is fixed source → target; expose the constant for shared modules.
     observe({
-      if (is.function(sync_direction_out)) sync_direction_out("A_to_B")
+      if (is.function(sync_direction_out)) sync_direction_out("source_to_target")
     })
     observe({
       if (is.function(transfer_mode_out))
@@ -1037,7 +1037,7 @@ mod_sync_server <- function(id,
     }
 
     copy_compatible <- reactive({
-      same_abi_series(route_version(input$install_a), route_version(input$install_b))
+      same_abi_series(route_version(input$install_source), route_version(input$install_target))
     })
 
     available_modes <- reactive({
@@ -1087,17 +1087,17 @@ mod_sync_server <- function(id,
     }, once = TRUE, ignoreNULL = FALSE)
 
     observeEvent(input$compare, {
-      a_path <- input$install_a
-      b_path <- input$install_b
+      src_path <- input$install_source
+      tgt_path <- input$install_target
 
-      if (is.null(a_path) || !nzchar(a_path) || is.null(b_path) || !nzchar(b_path)) {
+      if (is.null(src_path) || !nzchar(src_path) || is.null(tgt_path) || !nzchar(tgt_path)) {
         re_enable_compare()
         stop_busy()
         showNotification("Select a source and a target installation first.", type = "warning")
         return()
       }
 
-      if (identical(a_path, b_path)) {
+      if (identical(src_path, tgt_path)) {
         re_enable_compare()
         stop_busy()
         showNotification("Source and target must be different installations.", type = "warning")
@@ -1114,9 +1114,9 @@ mod_sync_server <- function(id,
       set_sync_progress(0, "Comparing installations", active = TRUE)
 
       tryCatch({
-        refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
+        refresh_comparison(src_path, tgt_path, progress_detail = "Starting comparison")
         comp <- comparison_data()
-        diff_statuses <- c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+        diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
         if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
           selected_statuses(diff_statuses)
         }
@@ -1170,8 +1170,8 @@ mod_sync_server <- function(id,
         return(DT::datatable(
           data.frame(
             package = character(),
-            version_in_a = character(),
-            version_in_b = character(),
+            version_in_source = character(),
+            version_in_target = character(),
             status = character()
           ),
           filter = "top",
@@ -1180,23 +1180,23 @@ mod_sync_server <- function(id,
         ))
       }
 
-      a_version <- route_version(input$install_a)
-      b_version <- route_version(input$install_b)
+      src_version <- route_version(input$install_source)
+      tgt_version <- route_version(input$install_target)
       raw_status <- comp[["status"]]
-      a_lbl <- if (is.na(a_version)) "A" else paste0("R ", a_version)
-      b_lbl <- if (is.na(b_version)) "B" else paste0("R ", b_version)
+      src_lbl <- if (is.na(src_version)) "source" else paste0("R ", src_version)
+      tgt_lbl <- if (is.na(tgt_version)) "target" else paste0("R ", tgt_version)
       status_labels <- raw_status
-      status_labels[raw_status == "same"]           <- "same"
-      status_labels[raw_status == "newer-in-A"]     <- paste0("newer in ", a_lbl)
-      status_labels[raw_status == "newer-in-B"]     <- paste0("newer in ", b_lbl)
-      status_labels[raw_status == "missing-from-A"] <- paste0("not in ", a_lbl)
-      status_labels[raw_status == "missing-from-B"] <- paste0("not in ", b_lbl)
+      status_labels[raw_status == "same"]                <- "same"
+      status_labels[raw_status == "newer-in-source"]     <- paste0("newer in ", src_lbl)
+      status_labels[raw_status == "newer-in-target"]     <- paste0("newer in ", tgt_lbl)
+      status_labels[raw_status == "missing-from-source"] <- paste0("not in ", src_lbl)
+      status_labels[raw_status == "missing-from-target"] <- paste0("not in ", tgt_lbl)
 
       # Source: a package's source is the same in either installation; take
       # whichever side reported it, defaulting to "unknown".
-      src_a <- if ("source_in_a" %in% names(comp)) comp[["source_in_a"]] else rep(NA_character_, nrow(comp))
-      src_b <- if ("source_in_b" %in% names(comp)) comp[["source_in_b"]] else rep(NA_character_, nrow(comp))
-      source_col <- ifelse(!is.na(src_a) & nzchar(src_a), src_a, src_b)
+      repo_src <- if ("repo_in_source" %in% names(comp)) comp[["repo_in_source"]] else rep(NA_character_, nrow(comp))
+      repo_tgt <- if ("repo_in_target" %in% names(comp)) comp[["repo_in_target"]] else rep(NA_character_, nrow(comp))
+      source_col <- ifelse(!is.na(repo_src) & nzchar(repo_src), repo_src, repo_tgt)
       source_col <- ifelse(is.na(source_col) | !nzchar(source_col), "unknown", source_col)
 
       # Result: per-package outcome from the most recent ship(), joined by name.
@@ -1218,16 +1218,16 @@ mod_sync_server <- function(id,
       display <- data.frame(
         package = comp[["package"]],
         source = factor(source_col),
-        version_in_a = ifelse(is.na(comp[["version_in_a"]]), "not installed", comp[["version_in_a"]]),
-        version_in_b = ifelse(is.na(comp[["version_in_b"]]), "not installed", comp[["version_in_b"]]),
+        version_in_source = ifelse(is.na(comp[["version_in_source"]]), "not installed", comp[["version_in_source"]]),
+        version_in_target = ifelse(is.na(comp[["version_in_target"]]), "not installed", comp[["version_in_target"]]),
         status = factor(status_labels),
         result = factor(result_col, levels = c("", result_levels)),
         status_raw = raw_status,
-        status_rank = match(raw_status, c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")),
+        status_rank = match(raw_status, c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target", "same")),
         stringsAsFactors = FALSE
       )
 
-      diff_statuses <- c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+      diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
 
       DT::datatable(
         display,
@@ -1237,8 +1237,8 @@ mod_sync_server <- function(id,
         colnames = c(
           "Package",
           "Source",
-          paste0("Version in ", a_lbl),
-          paste0("Version in ", b_lbl),
+          paste0("Version in ", src_lbl),
+          paste0("Version in ", tgt_lbl),
           "Status",
           "Result",
           "status_raw",
@@ -1346,8 +1346,8 @@ mod_sync_server <- function(id,
       }
       pending_sync(list(
         type        = "source_to_target",
-        source_path = input$install_a,
-        target_path = input$install_b,
+        source_path = input$install_source,
+        target_path = input$install_target,
         packages    = packages
       ))
       show_sync_confirmation(pending_sync())
@@ -1382,7 +1382,7 @@ mod_sync_server <- function(id,
         showNotification("Run Compare first.", type = "warning")
         return()
       }
-      batches <- build_batches(comp, input$install_a, input$install_b)
+      batches <- build_batches(comp, input$install_source, input$install_target)
       if (length(batches) == 0) {
         showNotification("Nothing to ship — the target already matches the source.", type = "message")
         return()
@@ -1611,8 +1611,8 @@ mod_sync_server <- function(id,
         set_sync_progress(80, "Refreshing comparison after sync", active = TRUE)
         add_sync_log("Refreshing comparison after sync.")
         refresh_comparison(
-          input$install_a,
-          input$install_b,
+          input$install_source,
+          input$install_target,
           progress_detail = "Refreshing comparison after sync",
           pct_base = 80,
           pct_span = 18
@@ -1740,8 +1740,8 @@ mod_sync_server <- function(id,
       ))
     }
 
-    observeEvent(input$restock_a, { do_restock(install_a_path, "source") })
-    observeEvent(input$restock_b, { do_restock(install_b_path, "target") })
+    observeEvent(input$restock_source, { do_restock(install_source_path, "source") })
+    observeEvent(input$restock_target, { do_restock(install_target_path, "target") })
 
     observeEvent(input$confirm_restock, {
       plan <- restock_pending()

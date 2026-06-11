@@ -3,7 +3,7 @@ server <- function(input, output, session) {
   to_r_path        <- reactiveVal(NULL)
   routes_cache     <- reactiveVal(NULL)
   comparison_rv    <- reactiveVal(NULL)
-  sync_direction_rv <- reactiveVal("A_to_B")
+  sync_direction_rv <- reactiveVal("source_to_target")
   transfer_mode_rv  <- reactiveVal("online")
   actionable_count  <- reactiveVal(0L)
 
@@ -32,8 +32,8 @@ server <- function(input, output, session) {
   mod_manifest_server("report", from_r_path, to_r_path, reactiveVal(NULL))
   mod_sync_server(
     "sync",
-    install_a_path    = from_r_path,
-    install_b_path    = to_r_path,
+    install_source_path = from_r_path,
+    install_target_path = to_r_path,
     routes_cache      = routes_cache,
     push_error        = push_error,
     comparison_out    = comparison_rv,

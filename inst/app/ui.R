@@ -9,8 +9,7 @@ ui <- bslib::page_navbar(
                  style = "vertical-align: middle; background: transparent;")
       ),
       tags$div(class = "app-version",
-               sprintf("v%s  ·  loaded %s", utils::packageVersion("courieR"),
-                       format(Sys.time(), "%Y-%m-%d %H:%M")))
+               sprintf("v%s", utils::packageVersion("courieR")))
     )
   ),
   window_title = "courieR",
@@ -51,11 +50,6 @@ ui <- bslib::page_navbar(
   ),
 
   bslib::nav_panel(
-    "Browse",
-    div(class = "advanced-pane advanced-depot", mod_origin_browse_ui("env"))
-  ),
-
-  bslib::nav_panel(
     title = tagList(
       "Custom Dispatch",
       uiOutput("custom_dispatch_badge", inline = TRUE)
@@ -65,16 +59,15 @@ ui <- bslib::page_navbar(
   ),
 
   bslib::nav_panel(
-    "Manifest",
-    div(class = "advanced-pane advanced-manifest", mod_manifest_ui("report"))
-  ),
-
-  bslib::nav_panel(
-    "Maintenance",
-    div(class = "advanced-pane advanced-maintenance",
-        bslib::card(
-          bslib::card_header("Restock"),
-          bslib::card_body(mod_sync_maintenance_ui("sync"))
-        ))
+    "Tools",
+    div(
+      class = "advanced-pane advanced-tools",
+      bslib::card(
+        bslib::card_header("Restock"),
+        bslib::card_body(mod_sync_maintenance_ui("sync"))
+      ),
+      mod_origin_browse_ui("env"),
+      div(class = "advanced-manifest", mod_manifest_ui("report"))
+    )
   )
 )
