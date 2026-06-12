@@ -1,4 +1,4 @@
-# courieR (development version)
+# courieR 0.3.0
 
 ## Dashboard UX
 
@@ -15,7 +15,17 @@
   target / not in target / not in source", and the redundant `A → B` context bar
   was removed.
 
-# courieR 0.3.0
+## Performance
+
+* Shipping no longer upgrades the entire dependency tree of each selected
+  package: the dashboard now calls `ship()` with `upgrade = FALSE`. Selected
+  packages still install or upgrade to the latest compatible version, but
+  their already-installed dependencies are left alone unless a version
+  requirement forces a change. This removes the main cause of multi-minute
+  single-package shipments.
+* Custom Dispatch now scans each library at most once per Ship click and
+  passes the scans to `ship()` (`source_pkgs`/`target_pkgs`), instead of
+  re-scanning both libraries for every batch.
 
 ## Bug fixes
 

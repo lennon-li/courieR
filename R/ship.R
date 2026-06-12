@@ -167,9 +167,12 @@ find_target_lib <- function(target_path) {
 #' @param dry_run If `TRUE`, build and return the installation plan without
 #'   installing anything. Use this to review what will happen before
 #'   committing to a sync.
-#' @param upgrade If `TRUE`, packages already present in the target but at an
-#'   older version than the source are upgraded. If `FALSE` (the default),
-#'   only packages missing from the target are installed.
+#' @param upgrade Passed to [pak::pkg_install()] in online mode. The packages
+#'   in the plan (missing or outdated in the target) are always installed at
+#'   the latest compatible version regardless. If `TRUE`, pak additionally
+#'   upgrades every outdated *dependency* of those packages in the target
+#'   library; if `FALSE` (the default), dependencies are only changed when a
+#'   version requirement forces it, which is much faster.
 #' @param log_callback Optional function of one argument. When provided, it is
 #'   called with a single character string for each progress message emitted
 #'   during package transfer.

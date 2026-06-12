@@ -268,6 +268,83 @@ test_that("ship() reuses provided manifests and skips scanning", {
   expect_true(res$dry_run)
 })
 
+test_that("ship() online mode copies pure-R CRAN packages instead of invoking pak", {
+  skip_if_not_installed("mockery")
+
+  pak_called <- FALSE
+  copy_plan_seen <- NULL
+
+  pure_r_lib <- file.path(tempdir(), "courieR_test_pure_r_pkg")
+  dir.create(pure_r_lib, recursive = TRUE, showWarnings = FALSE)
+
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  mockery::stub(ship, "manifest", function(...) {
+    data.table::data.table(package = "exact", version = "3.3", source = "CRAN")
+  })
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(
+        package = "exact",
+        version.x = "3.3",
+        source = "CRAN",
+        libpath = pure_r_lib
+      ),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "find_target_lib", function(...) tempdir())
+  mockery::stub(ship, ".run_pak_plan", function(...) {
+    pak_called <<- TRUE
+    data.table::data.table(package = character(), status = character(), message = character())
+  })
+  mockery::stub(ship, "copy_packages", function(plan, target_lib, ...) {
+    copy_plan_seen <<- plan
+    data.table::data.table(package = plan$package, status = "success", message = "copied")
+  })
+
+  res <- ship("dummy_src", "dummy_tgt", packages = "exact", dry_run = FALSE, mode = "online")
+
+  expect_false(pak_called)
+  expect_equal(copy_plan_seen$package, "exact")
+  expect_equal(res$results$message, "copied")
+})
+
+test_that("ship() passes upgrade flag through to pak for compiled online packages", {
+  skip_if_not_installed("mockery")
+
+  upgrade_seen <- NULL
+  compiled_lib <- file.path(tempdir(), "courieR_test_compiled_upgrade_flag")
+  dir.create(file.path(compiled_lib, "libs"), recursive = TRUE, showWarnings = FALSE)
+
+  mockery::stub(ship, "fs::file_exists", function(...) TRUE)
+  mockery::stub(ship, "manifest", function(...) {
+    data.table::data.table(package = "pkgA", version = "1.0", source = "CRAN")
+  })
+  mockery::stub(ship, "inventory", function(...) {
+    list(
+      missing = data.table::data.table(
+        package = "pkgA",
+        version.x = "1.0",
+        source = "CRAN",
+        libpath = compiled_lib
+      ),
+      outdated = data.table::data.table(),
+      comparison = data.table::data.table()
+    )
+  })
+  mockery::stub(ship, "find_target_lib", function(...) tempdir())
+  mockery::stub(ship, ".run_pak_plan", function(plan, target_path, upgrade = FALSE, ...) {
+    upgrade_seen <<- upgrade
+    data.table::data.table(package = plan$package, status = "success", message = "pak completed")
+  })
+
+  res <- ship("dummy_src", "dummy_tgt", packages = "pkgA", dry_run = FALSE, mode = "online", upgrade = FALSE)
+
+  expect_false(upgrade_seen)
+  expect_equal(res$results$status, "success")
+})
+
 test_that("ship() rejects invalid mode", {
   skip_if_not_installed("mockery")
 

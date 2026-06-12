@@ -19,7 +19,7 @@ Default \code{FALSE}.}
 \item{upgrade}{If \code{TRUE}, packages already in the target but at an older
 version are upgraded as well. Default \code{TRUE}.}
 
-\item{mode}{Transfer mode passed to \code{\link[=ship]{ship()}}: \code{"online"} (default —
+\item{mode}{Transfer mode passed to \code{\link[=ship]{ship()}}: \code{"online"} (default -
 reinstall via pak), \code{"offline"} (file-copy only, skip packages without a
 valid source path), or \code{"preserve"} (copy for exact version, fall back to a
 pinned pak spec on failure).}

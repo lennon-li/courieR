@@ -38,6 +38,13 @@ ui <- bslib::page_navbar(
          function navigateToCustomDispatch() {
            var tab = document.querySelector('[data-value=\"Custom Dispatch\"]');
            if (tab) tab.click();
+         }
+         // Global busy lock: while a long operation runs (Compare/Ship), grey
+         // out action buttons across ALL tabs (see body.app-busy in styles.css).
+         // Set client-side from button onclick so it takes effect before the
+         // blocking server observer starts; cleared by the server when done.
+         function courierAppBusy(on) {
+           document.body.classList.toggle('app-busy', !!on);
          }"
       ))
     ),

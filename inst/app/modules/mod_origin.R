@@ -32,7 +32,8 @@ mod_origin_server <- function(id,
                               comparison_rv     = NULL,
                               to_r_path         = NULL,
                               sync_direction_rv  = NULL,
-                              transfer_mode_rv   = NULL) {
+                              transfer_mode_rv   = NULL,
+                              refresh_after_ship = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     routes_rv  <- reactiveVal(NULL)
@@ -239,7 +240,8 @@ mod_origin_server <- function(id,
       sync_direction_rv  = sync_direction_rv,
       transfer_mode_rv   = transfer_mode_rv,
       push_error        = push_error,
-      incoming_search   = browse_to_ship_pkg
+      incoming_search   = browse_to_ship_pkg,
+      refresh_after_ship = refresh_after_ship
     )
   })
 }

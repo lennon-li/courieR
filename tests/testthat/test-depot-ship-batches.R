@@ -13,20 +13,20 @@ if (mod_path == "" || !file.exists(mod_path)) {
 source(mod_path, local = TRUE)
 
 comp <- data.frame(
-  package = c("ggplot2", "dplyr", "tidyr", "patchwork"),
-  status  = c("missing-from-B", "newer-in-A", "missing-from-A", "same"),
+  package = c("ggplot2", "dplyr", "tidyr", "patchwork", "scales"),
+  status  = c("missing-from-target", "newer-in-source", "missing-from-source", "same", "newer-in-target"),
   stringsAsFactors = FALSE
 )
 
 test_that(".build_depot_ship_batches returns empty list when all skip", {
-  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "skip", patchwork = "skip")
-  result  <- .build_depot_ship_batches(actions, comp, "A_to_B", "/a/Rscript", "/b/Rscript")
+  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "skip", patchwork = "skip", scales = "skip")
+  result  <- .build_depot_ship_batches(actions, comp, "source_to_target", "/a/Rscript", "/b/Rscript")
   expect_equal(length(result), 0L)
 })
 
-test_that(".build_depot_ship_batches routes A_to_B correctly", {
-  actions <- c(ggplot2 = "online", dplyr = "ship", tidyr = "skip", patchwork = "skip")
-  result  <- .build_depot_ship_batches(actions, comp, "A_to_B", "/a/Rscript", "/b/Rscript")
+test_that(".build_depot_ship_batches routes source_to_target correctly", {
+  actions <- c(ggplot2 = "online", dplyr = "ship", tidyr = "skip", patchwork = "skip", scales = "skip")
+  result  <- .build_depot_ship_batches(actions, comp, "source_to_target", "/a/Rscript", "/b/Rscript")
   expect_equal(length(result), 2L)
 
   online_batch <- result[[which(sapply(result, `[[`, "mode") == "online")]]
@@ -38,9 +38,9 @@ test_that(".build_depot_ship_batches routes A_to_B correctly", {
   expect_equal(copy_batch$pkgs, "dplyr")
 })
 
-test_that(".build_depot_ship_batches routes B_to_A correctly", {
-  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "online", patchwork = "skip")
-  result  <- .build_depot_ship_batches(actions, comp, "B_to_A", "/a/Rscript", "/b/Rscript")
+test_that(".build_depot_ship_batches routes target_to_source correctly", {
+  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "online", patchwork = "skip", scales = "skip")
+  result  <- .build_depot_ship_batches(actions, comp, "target_to_source", "/a/Rscript", "/b/Rscript")
   expect_equal(length(result), 1L)
   expect_equal(result[[1]]$pkgs, "tidyr")
   expect_equal(result[[1]]$src,  "/b/Rscript")
@@ -49,20 +49,30 @@ test_that(".build_depot_ship_batches routes B_to_A correctly", {
 })
 
 test_that(".build_depot_ship_batches routes full (two-way) correctly", {
-  actions <- c(ggplot2 = "online", dplyr = "skip", tidyr = "ship", patchwork = "skip")
+  actions <- c(ggplot2 = "online", dplyr = "skip", tidyr = "ship", patchwork = "skip", scales = "skip")
   result  <- .build_depot_ship_batches(actions, comp, "full", "/a/Rscript", "/b/Rscript")
   modes <- sapply(result, `[[`, "mode")
   srcs  <- sapply(result, `[[`, "src")
 
-  ab_online <- result[[which(modes == "online" & srcs == "/a/Rscript")]]
-  expect_equal(ab_online$pkgs, "ggplot2")
+  st_online <- result[[which(modes == "online" & srcs == "/a/Rscript")]]
+  expect_equal(st_online$pkgs, "ggplot2")
 
-  ba_copy <- result[[which(modes == "offline" & srcs == "/b/Rscript")]]
-  expect_equal(ba_copy$pkgs, "tidyr")
+  ts_copy <- result[[which(modes == "offline" & srcs == "/b/Rscript")]]
+  expect_equal(ts_copy$pkgs, "tidyr")
 })
 
 test_that(".build_depot_ship_batches ignores 'same' packages in full direction", {
-  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "skip", patchwork = "online")
+  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "skip", patchwork = "online", scales = "skip")
   result  <- .build_depot_ship_batches(actions, comp, "full", "/a/Rscript", "/b/Rscript")
   expect_equal(length(result), 0L)
+})
+
+test_that(".build_depot_ship_batches routes newer-in-target to target_to_source in full direction", {
+  actions <- c(ggplot2 = "skip", dplyr = "skip", tidyr = "skip", patchwork = "skip", scales = "online")
+  result  <- .build_depot_ship_batches(actions, comp, "full", "/a/Rscript", "/b/Rscript")
+  expect_equal(length(result), 1L)
+  expect_equal(result[[1]]$pkgs, "scales")
+  expect_equal(result[[1]]$src,  "/b/Rscript")
+  expect_equal(result[[1]]$tgt,  "/a/Rscript")
+  expect_equal(result[[1]]$mode, "online")
 })

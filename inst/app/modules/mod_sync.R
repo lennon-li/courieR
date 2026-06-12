@@ -36,18 +36,16 @@ mod_sync_ui <- function(id) {
       div(
         class = "sync-select-block sync-select-block-source",
         tags$div(class = "sync-select-label", "Select source installation"),
-        selectInput(ns("install_source"), NULL, choices = character(0), selectize = FALSE),
-        uiOutput(ns("install_source_badge"))
+        selectInput(ns("install_source"), NULL, choices = character(0), selectize = FALSE)
       ),
       div(
         class = "sync-select-block sync-select-block-target",
         tags$div(class = "sync-select-label", "Select target installation"),
         selectInput(ns("install_target"), NULL, choices = character(0), selectize = FALSE),
-        uiOutput(ns("install_target_hint")),
-        uiOutput(ns("install_target_badge"))
+        uiOutput(ns("install_target_hint"))
       ),
       actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn",
-        onclick = "this.disabled=true; if(window.courierStartTimer) window.courierStartTimer();"),
+        onclick = "this.disabled=true; if(window.courierAppBusy) courierAppBusy(true); if(window.courierStartTimer) window.courierStartTimer();"),
       div(
         class = "sync-select-block",
         tags$div(class = "sync-select-label sync-label-row",
@@ -115,7 +113,8 @@ mod_sync_server <- function(id,
                             comparison_out     = NULL,
                             actionable_out     = NULL,
                             sync_direction_out = NULL,
-                            transfer_mode_out  = NULL) {
+                            transfer_mode_out  = NULL,
+                            refresh_request    = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending_sync     <- reactiveVal(NULL)
@@ -128,7 +127,6 @@ mod_sync_server <- function(id,
     sync_pct         <- reactiveVal(0)
     sync_step        <- reactiveVal("Idle")
     selected_statuses <- reactiveVal(NULL)
-    last_ship_result  <- reactiveVal(NULL)
 
     # Session cache of manifest() scans keyed by Rscript path, so Compare/Ship/
     # Preview reuse a library scan instead of re-spawning a subprocess each time.
@@ -256,6 +254,7 @@ mod_sync_server <- function(id,
         shinyjs::runjs(sprintf(
           "(function(){
             var active=%s;
+            if(window.courierAppBusy) courierAppBusy(active);
             var b=document.getElementById('nav-progress-bar');
             var st=document.getElementById('nav-progress-step');
             if(st){ st.textContent=%s; }
@@ -669,22 +668,6 @@ mod_sync_server <- function(id,
     }
 
 
-    output$install_source_badge <- renderUI({
-      src_version <- route_version(input$install_source)
-      div(
-        class = "sync-install-meta sync-install-meta-source",
-        shiny::HTML(r_badge(src_version, "source"))
-      )
-    })
-
-    output$install_target_badge <- renderUI({
-      tgt_version <- route_version(input$install_target)
-      div(
-        class = "sync-install-meta sync-install-meta-target",
-        shiny::HTML(r_badge(tgt_version, "target"))
-      )
-    })
-
     output$detecting_msg <- renderUI({
       if (detecting()) {
         return(div(
@@ -980,7 +963,8 @@ mod_sync_server <- function(id,
     # returns and Restock, whose buttons start the timer on click.
     stop_busy <- function() {
       shinyjs::runjs(
-        "if(window.courierStopTimer) window.courierStopTimer();
+        "if(window.courierAppBusy) courierAppBusy(false);
+         if(window.courierStopTimer) window.courierStopTimer();
          var b=document.getElementById('nav-progress-bar'); if(b) b.style.width='100%';
          var w=document.getElementById('nav-progress-wrap');
          setTimeout(function(){ if(w) w.style.display='none'; if(b) b.style.width='0%'; }, 1200);
@@ -1106,8 +1090,6 @@ mod_sync_server <- function(id,
 
       if (is.function(comparison_out))  comparison_out(NULL)
       if (is.function(actionable_out))  actionable_out(0L)
-      last_ship_result(NULL)
-
       selected_statuses(NULL)
       add_sync_log("─────── Compare ───────")
       add_sync_log("Starting comparison…")
@@ -1134,6 +1116,47 @@ mod_sync_server <- function(id,
       re_enable_compare()
     })
 
+    if (!is.null(refresh_request)) {
+      observeEvent(refresh_request(), {
+        req <- refresh_request()
+        src_path <- req$source_path %||% input$install_source
+        tgt_path <- req$target_path %||% input$install_target
+        if (is.null(src_path) || !nzchar(src_path) || is.null(tgt_path) || !nzchar(tgt_path)) {
+          return()
+        }
+
+        invalidate_manifest(src_path)
+        invalidate_manifest(tgt_path)
+        add_sync_log("─────── Refresh ───────")
+        add_sync_log("Custom Dispatch completed; refreshing all comparison tables.")
+        set_sync_progress(0, "Refreshing tables after Custom Dispatch", active = TRUE)
+
+        tryCatch({
+          refresh_comparison(
+            src_path,
+            tgt_path,
+            progress_detail = "Refreshing tables after Custom Dispatch"
+          )
+          comp <- comparison_data()
+          diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
+          if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
+            selected_statuses(diff_statuses)
+          } else {
+            selected_statuses(NULL)
+          }
+          if (is.function(comparison_out)) comparison_out(comp)
+          diff_n <- if (is.null(comp)) 0L else sum(comp[["status"]] != "same")
+          if (is.function(actionable_out)) actionable_out(diff_n)
+          set_sync_progress(100, "Tables refreshed", active = FALSE)
+        }, error = function(e) {
+          set_sync_progress(0, "Refresh failed", active = FALSE)
+          add_sync_log("Refresh failed: ", e$message)
+          showNotification(paste("Refresh failed:", e$message), type = "error", duration = NULL)
+          if (is.function(push_error)) push_error(e$message, context = "Refreshing after Custom Dispatch")
+        })
+      }, ignoreNULL = TRUE)
+    }
+
     observeEvent(input$filter_statuses, {
       vals <- input$filter_statuses
       if (is.null(vals) || length(vals) == 0) {
@@ -1149,20 +1172,6 @@ mod_sync_server <- function(id,
       if (is.null(filter) || is.null(comp)) return(comp)
       comp[comp[["status"]] %in% filter, ]
     })
-
-    # Map a ship() per-package status/message to a plain verb for the Result
-    # column. Plain text (not HTML) so the column can use a select-dropdown
-    # filter; colour is applied separately via formatStyle.
-    result_levels <- c("installed", "updated", "copied", "synced", "failed", "skipped")
-    result_label <- function(status, message) {
-      message <- message %||% ""
-      if (identical(status, "error"))   return("failed")
-      if (identical(status, "skipped")) return("skipped")
-      if (grepl("^Installed", message)) return("installed")
-      if (grepl("^Upgraded", message))  return("updated")
-      if (grepl("copied", message, ignore.case = TRUE)) return("copied")
-      "synced"
-    }
 
     output$comparison_table <- DT::renderDataTable({
       comp <- sync_comparison()
@@ -1199,29 +1208,14 @@ mod_sync_server <- function(id,
       source_col <- ifelse(!is.na(repo_src) & nzchar(repo_src), repo_src, repo_tgt)
       source_col <- ifelse(is.na(source_col) | !nzchar(source_col), "unknown", source_col)
 
-      # Result: per-package outcome from the most recent ship(), joined by name.
-      # Blank for untouched / "same" packages; failure reason shown on hover.
-      result_col <- rep("", nrow(comp))
-      res_obj <- last_ship_result()
-      if (!is.null(res_obj) && !is.null(res_obj$results) && nrow(res_obj$results) > 0) {
-        rr <- res_obj$results
-        idx <- match(comp[["package"]], rr$package)
-        result_col <- vapply(seq_along(idx), function(i) {
-          j <- idx[i]
-          if (is.na(j)) return("")
-          result_label(rr$status[[j]], rr$message[[j]])
-        }, character(1))
-      }
-
-      # factor() on source/result makes DT render a select-dropdown filter for
-      # those columns (instead of a free-text search box).
+      # factor() on source makes DT render a select-dropdown filter for the
+      # repository/source column instead of a free-text search box.
       display <- data.frame(
         package = comp[["package"]],
         source = factor(source_col),
         version_in_source = ifelse(is.na(comp[["version_in_source"]]), "not installed", comp[["version_in_source"]]),
         version_in_target = ifelse(is.na(comp[["version_in_target"]]), "not installed", comp[["version_in_target"]]),
         status = factor(status_labels),
-        result = factor(result_col, levels = c("", result_levels)),
         status_raw = raw_status,
         status_rank = match(raw_status, c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target", "same")),
         stringsAsFactors = FALSE
@@ -1240,7 +1234,6 @@ mod_sync_server <- function(id,
           paste0("Version in ", src_lbl),
           paste0("Version in ", tgt_lbl),
           "Status",
-          "Result",
           "status_raw",
           "status_rank"
         ),
@@ -1251,8 +1244,8 @@ mod_sync_server <- function(id,
           scrollX = FALSE,
           autoWidth = FALSE,
           dom = "rt<'sync-table-foot'lip>",
-          order = list(list(7, "asc"), list(0, "asc")),
-          columnDefs = list(list(targets = c(6, 7), visible = FALSE))
+          order = list(list(6, "asc"), list(0, "asc")),
+          columnDefs = list(list(targets = c(5, 6), visible = FALSE))
         ),
         class = "stripe hover compact sync-table"
       ) |>
@@ -1270,14 +1263,6 @@ mod_sync_server <- function(id,
           fontWeight = DT::styleEqual(
             c("same", diff_statuses),
             c("400", "600", "600", "600", "600")
-          )
-        ) |>
-        DT::formatStyle(
-          "result",
-          fontWeight = 650,
-          color = DT::styleEqual(
-            c("installed", "updated", "copied", "synced", "failed", "skipped"),
-            c("#1f7a4d", "#1f7a4d", "#1f7a4d", "#1f7a4d", "#c0392b", "#6d879b")
           )
         )
     })
@@ -1326,7 +1311,7 @@ mod_sync_server <- function(id,
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("confirm_sync"), "Ship", class = "btn-primary",
-            onclick = "if(window.courierStartTimer) window.courierStartTimer();",
+            onclick = "if(window.courierAppBusy) courierAppBusy(true); if(window.courierStartTimer) window.courierStartTimer();",
             style = "background: linear-gradient(90deg,#5f4ab4 0%,#8a52c8 100%); border:0; font-weight:800;")
         )
       ))
@@ -1416,6 +1401,17 @@ mod_sync_server <- function(id,
         div(
           action_summary_ui(n_copy, n_binary, n_source),
           div(class = "modal-ship-mode", mode_note_ui(mode)),
+          div(
+            class = "preview-custom-dispatch-note",
+            tags$strong("Want to choose specific packages? "),
+            tags$span("Open "),
+            tags$a(
+              href = "#",
+              onclick = "var m=document.getElementById('shiny-modal'); if(m && window.bootstrap){var inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide();} navigateToCustomDispatch(); return false;",
+              "Custom Dispatch"
+            ),
+            tags$span(" to cherry-pick before shipping.")
+          ),
           div(
             class = "invoice-card",
             div(class = "invoice-head", "Estimate"),
@@ -1529,7 +1525,9 @@ mod_sync_server <- function(id,
             source_path = batch$source_path,
             target_path = batch$target_path,
             packages = batch$packages,
-            upgrade = TRUE,
+            # FALSE still brings the named packages to the latest compatible
+            # version; TRUE would also upgrade every dependency in the target.
+            upgrade = FALSE,
             log_callback = add_sync_log,
             mode = input$transfer_mode,
             source_pkgs = get_manifest(batch$source_path),
@@ -1577,12 +1575,6 @@ mod_sync_server <- function(id,
           data.table::data.table(package = character(), action = character())
 
         elapsed <- as.numeric(difftime(Sys.time(), ship_start_time, units = "secs"))
-        last_ship_result(list(
-          results     = all_results,
-          plan        = all_plans,
-          elapsed_sec = elapsed
-        ))
-
         # Overall summary to the log panel (replaces the old receipt panel).
         if (nrow(all_results) > 0) {
           st  <- all_results$status
@@ -1655,15 +1647,15 @@ mod_sync_server <- function(id,
       }
 
       pending_sync(NULL)
-      # Clear the status filter so successfully-synced packages (now "same")
-      # stay visible with their Result column populated.
+      # The table is refreshed after shipping; leave filters broad so any
+      # remaining differences are obvious.
       selected_statuses(NULL)
       re_enable_compare()
       re_enable_btn("sync_btn")
     })
 
-    # Per-package outcomes now appear inline in the comparison table's Result
-    # column; the overall summary is written to the log panel after each sync.
+    # Per-package outcomes are summarized in the log; the comparison table is
+    # refreshed after each shipment instead of carrying a stale Result column.
 
     # ── Restock ───────────────────────────────────────────────────────────
     restock_pending <- reactiveVal(NULL)

@@ -58,7 +58,7 @@ mod_depot_ship_ui <- function(id) {
        }
        (function(){
          var _iv = null, _t0 = null;
-         window.courierStartTimer = function() {
+         window.courierStartDepotTimer = function() {
            var el = document.getElementById('%s');
            if (!el) return;
            _t0 = Date.now();
@@ -75,12 +75,16 @@ mod_depot_ship_ui <- function(id) {
            if (_iv) { clearInterval(_iv); _iv = null; }
            var el = document.getElementById('%s');
            if (el) el.style.display = 'none';
+           // Safety net for the global busy lock: idle means no observer is
+           // running, so no operation can still be in flight.
+           document.body.classList.remove('app-busy');
          });
        })();",
       ns("depot_timer"), ns("depot_timer")
     ))),
 
     # Filter chips span the full width above the workspace
+    uiOutput(ns("route_summary")),
     uiOutput(ns("ship_chips")),
 
     div(
@@ -117,7 +121,7 @@ mod_depot_ship_ui <- function(id) {
           class = "depot-ship-footer",
           actionButton(ns("depot_ship_btn"), "Ship",
                        class = "btn sync-compare-btn depot-ship-execute-btn",
-                       onclick = "if(window.courierStartTimer) window.courierStartTimer();"),
+                       onclick = "if(window.courierAppBusy) courierAppBusy(true); if(window.courierStartDepotTimer) window.courierStartDepotTimer();"),
           tags$span(id = ns("depot_timer"), class = "depot-ship-timer", style = "display:none;")
         )
       ),
@@ -138,7 +142,8 @@ mod_depot_ship_server <- function(id,
                                    sync_direction_rv  = NULL,
                                    transfer_mode_rv   = NULL,
                                    push_error        = NULL,
-                                   incoming_search   = NULL) {
+                                   incoming_search   = NULL,
+                                   refresh_after_ship = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -146,13 +151,28 @@ mod_depot_ship_server <- function(id,
     # The checked rows ARE the shipment: input$ship_cb_rows holds 1-based row
     # indices into visible_comp(). The "How to ship" dropdown (input$ship_mode)
     # decides the mode applied to that checked set.
-    ship_filter_status   <- reactiveVal(NULL)  # NULL = all diff statuses shown
+    ship_filter_status   <- reactiveVal("missing-from-target")
     depot_ship_result    <- reactiveVal(NULL)
     shipping_in_progress <- reactiveVal(FALSE)
     depot_log <- reactiveVal(character(0))
+    # Mirrors mod_sync's add_sync_log: besides the reactiveVal (which cannot
+    # re-render while the synchronous ship loop blocks the event loop), each
+    # line is echoed to the R console via message() and pushed straight into
+    # the DOM with shinyjs::runjs so the log pane updates in real time.
     depot_log_append <- function(...) {
       msg <- paste0(...)
-      depot_log(utils::tail(c(isolate(depot_log()), msg), 1000L))
+      entry <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
+      depot_log(utils::tail(c(isolate(depot_log()), entry), 1000L))
+      message(entry)
+      try({
+        entry_json <- jsonlite::toJSON(entry, auto_unbox = TRUE)
+        shinyjs::runjs(sprintf(
+          "(function(){var el=document.getElementById('%s'); if(!el) return; var raw=%s; var s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); if(el.getAttribute('data-empty')==='true'){el.removeAttribute('data-empty');el.innerHTML=s;}else{el.innerHTML=s+(el.innerHTML?'\\n'+el.innerHTML:'');} el.scrollTop=0;})();",
+          ns("depot_log_pre"),
+          entry_json
+        ))
+      }, silent = TRUE)
+      invisible(NULL)
     }
 
     get_direction <- function() {
@@ -163,6 +183,13 @@ mod_depot_ship_server <- function(id,
     }
     get_comp <- function() {
       if (is.function(comparison_rv)) comparison_rv() else NULL
+    }
+
+    install_label <- function(path) {
+      if (is.null(path) || length(path) == 0L || is.na(path) || !nzchar(path)) {
+        return("not selected")
+      }
+      paste0(basename(dirname(dirname(path))), " · ", path)
     }
 
     # Ship button reflects the checked-row count: disabled with 0 selected or
@@ -181,17 +208,36 @@ mod_depot_ship_server <- function(id,
     })
 
     # ── Defaults when comparison changes ────────────────────────────────────
-    # Show the differing statuses by default; selection starts empty so the user
-    # checks exactly what they want to ship. Also default the mode dropdown to
-    # the global transfer mode chosen in Dispatch.
+    # Default to packages absent from the target only. Users can click the chips
+    # above the table to add newer/reverse/same statuses when they need a wider
+    # view. Selection starts empty so the user checks exactly what they want.
     observeEvent(get_comp(), {
       comp <- get_comp()
       if (is.null(comp) || nrow(comp) == 0) return()
-      ship_filter_status(c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target"))
+      ship_filter_status("missing-from-target")
       depot_ship_result(NULL)
       mode_default <- switch(get_mode(), offline = "ship", preserve = "ship", "online")
       updateSelectInput(session, "ship_mode", selected = mode_default)
     }, ignoreNULL = FALSE)
+
+    output$route_summary <- renderUI({
+      from <- if (is.function(from_r_path)) from_r_path() else NULL
+      to   <- if (is.function(to_r_path))   to_r_path()   else NULL
+      div(
+        class = "depot-route-summary",
+        div(
+          class = "depot-route-node depot-route-source",
+          tags$span(class = "depot-route-kicker", "Source"),
+          tags$span(class = "depot-route-path", title = from %||% "", install_label(from))
+        ),
+        tags$span(class = "depot-route-arrow", "\u2192"),
+        div(
+          class = "depot-route-node depot-route-target",
+          tags$span(class = "depot-route-kicker", "Target"),
+          tags$span(class = "depot-route-path", title = to %||% "", install_label(to))
+        )
+      )
+    })
 
     # ── Pre-populate search from Browse "View in Ship" ──────────────────────
     if (!is.null(incoming_search)) {
@@ -420,6 +466,24 @@ mod_depot_ship_server <- function(id,
       all_results <- list()
       all_plans   <- list()
 
+      # One library scan per installation for the whole ship click. Without
+      # this, ship() re-scans both libraries per batch (and the Compare scan
+      # is redone too). Installing into a target invalidates its cached scan.
+      lib_scans <- list()
+      get_scan <- function(path) {
+        if (is.null(lib_scans[[path]])) {
+          depot_log_append(sprintf("Scanning library of %s ...", path))
+          t0 <- Sys.time()
+          lib_scans[[path]] <<- courieR::manifest(rscript_path = path, format = "data.table")
+          depot_log_append(sprintf(
+            "Scan complete: %d package(s) (%.1fs).",
+            nrow(lib_scans[[path]]),
+            as.numeric(difftime(Sys.time(), t0, units = "secs"))
+          ))
+        }
+        lib_scans[[path]]
+      }
+
       ok <- tryCatch({
         for (i in seq_along(batches)) {
           b <- batches[[i]]
@@ -427,10 +491,17 @@ mod_depot_ship_server <- function(id,
             source_path  = b$src,
             target_path  = b$tgt,
             packages     = b$pkgs,
-            upgrade      = TRUE,
+            # FALSE still installs/upgrades the *selected* packages (named pak
+            # specs always resolve to the latest compatible version); TRUE
+            # would additionally upgrade their entire dependency trees, which
+            # turns a one-package ship into a long multi-package job.
+            upgrade      = FALSE,
             mode         = b$mode,
-            log_callback = depot_log_append
+            log_callback = depot_log_append,
+            source_pkgs  = get_scan(b$src),
+            target_pkgs  = get_scan(b$tgt)
           )
+          lib_scans[[b$tgt]] <- NULL
           if (!is.null(res$results) && nrow(res$results) > 0L)
             all_results[[i]] <- res$results
           if (!is.null(res$plan) && nrow(res$plan) > 0L)
@@ -496,6 +567,9 @@ mod_depot_ship_server <- function(id,
           sprintf("Ship complete — %d package(s) processed in %.0fs.", total, elapsed),
           type = "message", duration = 10
         )
+        if (is.function(refresh_after_ship)) {
+          try(refresh_after_ship(), silent = TRUE)
+        }
         # Clear the selection so the shipped packages aren't accidentally re-sent.
         shinyjs::runjs(sprintf("courierDepotSelectAll('%s', false);", ns("ship_table")))
       }
