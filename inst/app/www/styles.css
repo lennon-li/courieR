@@ -1690,3 +1690,43 @@ body.app-busy .modal .action-button {
   pointer-events: auto;
   opacity: 1;
 }
+
+/* ── Live shipping hero panel (Custom Dispatch) ───────────────────────── */
+.depot-hero {
+  background: linear-gradient(135deg, #1e9e62 0%, #15815a 100%);
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  box-shadow: 0 3px 10px rgba(21, 129, 90, 0.25);
+}
+.depot-hero-kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.depot-hero-main {
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.depot-hero-pkg {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.depot-hero-meta {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+.depot-summary-est {
+  margin-left: 10px;
+  color: #5f4ab4;
+  font-weight: 700;
+}

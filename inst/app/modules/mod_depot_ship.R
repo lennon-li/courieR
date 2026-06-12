@@ -75,12 +75,47 @@ mod_depot_ship_ui <- function(id) {
            if (_iv) { clearInterval(_iv); _iv = null; }
            var el = document.getElementById('%s');
            if (el) el.style.display = 'none';
+           if (window.courierDepotHero) window.courierDepotHero.stop();
            // Safety net for the global busy lock: idle means no observer is
            // running, so no operation can still be in flight.
            document.body.classList.remove('app-busy');
          });
+       })();
+       // Live shipping hero panel: shown while the synchronous ship runs.
+       // The server pushes status into it via shinyjs::runjs because normal
+       // outputs cannot re-render until the blocking observer finishes.
+       (function(){
+         var heroId = '%s', _iv = null, _t0 = null;
+         function el(suffix){ return document.getElementById(heroId + suffix); }
+         function fmt(s){
+           var m = Math.floor(s / 60);
+           return m > 0 ? (m + 'm ' + (s %% 60) + 's') : (s + 's');
+         }
+         window.courierDepotHero = {
+           start: function(total, est){
+             var h = el(''); if (!h) return;
+             h.style.display = 'block';
+             h.innerHTML =
+               '<div class=\"depot-hero-kicker\">Shipping in progress</div>' +
+               '<div class=\"depot-hero-main\"><span id=\"' + heroId + '_count\">0</span> / ' + total + ' delivered</div>' +
+               '<div class=\"depot-hero-pkg\" id=\"' + heroId + '_pkg\">Preparing shipment…</div>' +
+               '<div class=\"depot-hero-meta\"><span id=\"' + heroId + '_timer\">0s</span> elapsed · estimated ' + est + '</div>';
+             _t0 = Date.now();
+             clearInterval(_iv);
+             _iv = setInterval(function(){
+               var t = el('_timer');
+               if (t) t.textContent = fmt(Math.floor((Date.now() - _t0) / 1000));
+             }, 1000);
+           },
+           status: function(txt){ var p = el('_pkg'); if (p) p.textContent = txt; },
+           count:  function(k){ var c = el('_count'); if (c) c.textContent = k; },
+           stop:   function(){
+             clearInterval(_iv); _iv = null;
+             var h = el(''); if (h) h.style.display = 'none';
+           }
+         };
        })();",
-      ns("depot_timer"), ns("depot_timer")
+      ns("depot_timer"), ns("depot_timer"), ns("depot_hero")
     ))),
 
     # Filter chips span the full width above the workspace
@@ -126,9 +161,10 @@ mod_depot_ship_ui <- function(id) {
         )
       ),
 
-      # Right pane — log
+      # Right pane — live hero (during ship) + log
       div(
         class = "sync-log-pane",
+        tags$div(id = ns("depot_hero"), class = "depot-hero", style = "display:none;"),
         uiOutput(ns("depot_log_ui"))
       )
     )
@@ -143,7 +179,9 @@ mod_depot_ship_server <- function(id,
                                    transfer_mode_rv   = NULL,
                                    push_error        = NULL,
                                    incoming_search   = NULL,
-                                   refresh_after_ship = NULL) {
+                                   refresh_after_ship = NULL,
+                                   route_label       = NULL,
+                                   shared_scans      = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -154,6 +192,7 @@ mod_depot_ship_server <- function(id,
     ship_filter_status   <- reactiveVal("missing-from-target")
     depot_ship_result    <- reactiveVal(NULL)
     shipping_in_progress <- reactiveVal(FALSE)
+    awaiting_refresh     <- reactiveVal(FALSE)
     depot_log <- reactiveVal(character(0))
     # Mirrors mod_sync's add_sync_log: besides the reactiveVal (which cannot
     # re-render while the synchronous ship loop blocks the event loop), each
@@ -214,11 +253,22 @@ mod_depot_ship_server <- function(id,
     observeEvent(get_comp(), {
       comp <- get_comp()
       if (is.null(comp) || nrow(comp) == 0) return()
+      if (isTRUE(awaiting_refresh())) {
+        awaiting_refresh(FALSE)
+        depot_log_append("Comparison refreshed - the table now reflects the delivered packages.")
+      }
       ship_filter_status("missing-from-target")
       depot_ship_result(NULL)
       mode_default <- switch(get_mode(), offline = "ship", preserve = "ship", "online")
       updateSelectInput(session, "ship_mode", selected = mode_default)
     }, ignoreNULL = FALSE)
+
+    # Prefer the detection-derived label (version, location AND library path)
+    # over the bare executable path; the full path stays in the tooltip.
+    node_label <- function(path) {
+      rich <- if (is.function(route_label)) route_label(path) else NULL
+      rich %||% install_label(path)
+    }
 
     output$route_summary <- renderUI({
       from <- if (is.function(from_r_path)) from_r_path() else NULL
@@ -228,13 +278,13 @@ mod_depot_ship_server <- function(id,
         div(
           class = "depot-route-node depot-route-source",
           tags$span(class = "depot-route-kicker", "Source"),
-          tags$span(class = "depot-route-path", title = from %||% "", install_label(from))
+          tags$span(class = "depot-route-path", title = from %||% "", node_label(from))
         ),
         tags$span(class = "depot-route-arrow", "\u2192"),
         div(
           class = "depot-route-node depot-route-target",
           tags$span(class = "depot-route-kicker", "Target"),
-          tags$span(class = "depot-route-path", title = to %||% "", install_label(to))
+          tags$span(class = "depot-route-path", title = to %||% "", node_label(to))
         )
       )
     })
@@ -398,10 +448,37 @@ mod_depot_ship_server <- function(id,
           tags$span("Check packages to ship, then press Ship.")
         ))
       }
+      # Estimated time for the current selection, from per-machine calibrated
+      # rates (every completed ship updates them).
+      est_text <- tryCatch({
+        visible <- visible_comp()
+        sel     <- visible[["package"]][input$ship_cb_rows]
+        dir     <- get_direction()
+        repo_col <- if (identical(dir, "target_to_source")) "repo_in_target" else "repo_in_source"
+        repo <- if (!is.null(visible) && repo_col %in% names(visible)) {
+          visible[[repo_col]][match(sel, visible[["package"]])]
+        } else {
+          rep(NA_character_, length(sel))
+        }
+        est <- if (identical(mode, "ship")) {
+          courieR:::estimate_ship_secs(n_copy = length(sel))
+        } else {
+          resolvable <- !is.na(repo) & repo %in% c("CRAN", "Bioconductor", "GitHub")
+          courieR:::estimate_ship_secs(
+            n_copy   = sum(!resolvable),
+            n_binary = sum(resolvable & repo == "CRAN"),
+            n_source = sum(resolvable & repo %in% c("Bioconductor", "GitHub"))
+          )
+        }
+        est$text
+      }, error = function(e) NULL)
       div(
         class = "depot-ship-summary",
         tags$span(class = if (identical(mode, "ship")) "depot-summary-ship" else "depot-summary-online",
-                  sprintf("%d package(s) selected — %s", n, mode_label))
+                  sprintf("%d package(s) selected — %s", n, mode_label)),
+        if (!is.null(est_text)) {
+          tags$span(class = "depot-summary-est", sprintf("estimated time: %s", est_text))
+        }
       )
     })
 
@@ -458,6 +535,64 @@ mod_depot_ship_server <- function(id,
       }
       depot_log_append("Tip: real-time pak output streams to the R console — monitor there while this runs.")
 
+      # ── Estimated time + live hero panel ────────────────────────────────
+      # Categorise the shipment by route, estimate with per-machine calibrated
+      # rates, and light up the hero panel; ship_log_cb keeps it updated with
+      # the package currently in flight while the observer blocks the UI.
+      est <- local({
+        repo_col <- if (identical(dir, "target_to_source")) "repo_in_target" else "repo_in_source"
+        repo <- if (repo_col %in% names(comp)) {
+          comp[[repo_col]][match(selected_pkgs, comp[["package"]])]
+        } else {
+          rep(NA_character_, length(selected_pkgs))
+        }
+        if (identical(mode, "ship")) {
+          courieR:::estimate_ship_secs(n_copy = length(selected_pkgs))
+        } else {
+          resolvable <- !is.na(repo) & repo %in% c("CRAN", "Bioconductor", "GitHub")
+          courieR:::estimate_ship_secs(
+            n_copy   = sum(!resolvable),
+            n_binary = sum(resolvable & repo == "CRAN"),
+            n_source = sum(resolvable & repo %in% c("Bioconductor", "GitHub"))
+          )
+        }
+      })
+      depot_log_append(sprintf("Estimated time: %s (calibrates from each completed ship).", est$text))
+
+      hero_js <- function(fn, arg = NULL) {
+        arg_js <- if (is.null(arg)) "" else jsonlite::toJSON(arg, auto_unbox = TRUE)
+        try(shinyjs::runjs(sprintf(
+          "if(window.courierDepotHero) window.courierDepotHero.%s(%s);", fn, arg_js
+        )), silent = TRUE)
+      }
+      try(shinyjs::runjs(sprintf(
+        "if(window.courierDepotHero) window.courierDepotHero.start(%d, %s);",
+        total, jsonlite::toJSON(est$text, auto_unbox = TRUE)
+      )), silent = TRUE)
+
+      delivered <- 0L
+      ship_log_cb <- function(msg) {
+        depot_log_append(msg)
+        m <- regmatches(msg, regexec("^\\[(\\d+)/(\\d+)\\] (\\S+) - copying", msg))[[1]]
+        if (length(m) == 4L) {
+          hero_js("status", sprintf("Copying %s (%s/%s) ...", m[[4]], m[[2]], m[[3]]))
+          return(invisible(NULL))
+        }
+        m <- regmatches(msg, regexec("^\\[ok\\] (\\S+) - copied", msg))[[1]]
+        if (length(m) == 2L) {
+          delivered <<- delivered + 1L
+          hero_js("count", delivered)
+          hero_js("status", sprintf("%s delivered", m[[2]]))
+          return(invisible(NULL))
+        }
+        if (grepl("^Reinstalling \\d+ package", msg)) {
+          hero_js("status", "Installing online via pak - live output in the R console ...")
+        } else if (grepl("^pak subprocess finished successfully", msg)) {
+          hero_js("status", "pak install finished; verifying target library ...")
+        }
+        invisible(NULL)
+      }
+
       showNotification(
         sprintf("Shipping %d package(s)… watch the R console for real-time progress.", total),
         type = "message", duration = NULL, id = "depot-ship-busy"
@@ -466,27 +601,46 @@ mod_depot_ship_server <- function(id,
       all_results <- list()
       all_plans   <- list()
 
-      # One library scan per installation for the whole ship click. Without
-      # this, ship() re-scans both libraries per batch (and the Compare scan
-      # is redone too). Installing into a target invalidates its cached scan.
-      lib_scans <- list()
+      # One library scan per installation, served from the app-wide shared
+      # cache: a ship right after Compare reuses the Compare scans and spawns
+      # NO scan subprocesses (scans are the slowest step on some machines).
+      # Installing into a target invalidates its cached scan.
+      lib_scans <- list()  # local fallback when no shared cache is provided
       get_scan <- function(path) {
-        if (is.null(lib_scans[[path]])) {
+        m <- if (!is.null(shared_scans)) {
+          shared_scans$get(path, log = depot_log_append)
+        } else if (!is.null(lib_scans[[path]])) {
+          lib_scans[[path]]
+        } else {
           depot_log_append(sprintf("Scanning library of %s ...", path))
           t0 <- Sys.time()
-          lib_scans[[path]] <<- courieR::manifest(rscript_path = path, format = "data.table")
-          depot_log_append(sprintf(
-            "Scan complete: %d package(s) (%.1fs).",
-            nrow(lib_scans[[path]]),
-            as.numeric(difftime(Sys.time(), t0, units = "secs"))
-          ))
+          m_local <- courieR::manifest(rscript_path = path, format = "data.table",
+                                       timeout_sec = 300L)
+          if (!isTRUE(attr(m_local, "timed_out"))) {
+            lib_scans[[path]] <<- m_local
+            depot_log_append(sprintf(
+              "Scan complete: %d package(s) (%.1fs).", nrow(m_local),
+              as.numeric(difftime(Sys.time(), t0, units = "secs"))
+            ))
+          }
+          m_local
         }
-        lib_scans[[path]]
+        # A timed-out scan is an empty table; shipping against it would plan
+        # to reinstall everything. Fail the ship instead.
+        if (isTRUE(attr(m, "timed_out"))) {
+          stop(sprintf("Library scan of %s timed out - retry, or check that this R installation can start.", path))
+        }
+        m
+      }
+      invalidate_scan <- function(path) {
+        if (!is.null(shared_scans)) shared_scans$invalidate(path)
+        lib_scans[[path]] <<- NULL
       }
 
       ok <- tryCatch({
         for (i in seq_along(batches)) {
           b <- batches[[i]]
+          batch_t0 <- Sys.time()
           res <- courieR::ship(
             source_path  = b$src,
             target_path  = b$tgt,
@@ -497,15 +651,29 @@ mod_depot_ship_server <- function(id,
             # turns a one-package ship into a long multi-package job.
             upgrade      = FALSE,
             mode         = b$mode,
-            log_callback = depot_log_append,
+            log_callback = ship_log_cb,
             source_pkgs  = get_scan(b$src),
             target_pkgs  = get_scan(b$tgt)
           )
-          lib_scans[[b$tgt]] <- NULL
+          invalidate_scan(b$tgt)
+          # Calibrate the per-package time estimate from what really happened
+          # on this machine (offline/preserve batches are pure copies; online
+          # batches are predominantly pak installs).
+          batch_secs <- as.numeric(difftime(Sys.time(), batch_t0, units = "secs"))
+          n_b <- length(b$pkgs)
+          if (n_b > 0 && batch_secs > 0) {
+            route <- if (b$mode %in% c("offline", "preserve")) "copy" else "binary"
+            try(courieR:::record_ship_rate(route, batch_secs / n_b), silent = TRUE)
+          }
           if (!is.null(res$results) && nrow(res$results) > 0L)
             all_results[[i]] <- res$results
           if (!is.null(res$plan) && nrow(res$plan) > 0L)
             all_plans[[i]] <- res$plan
+          # Authoritative delivered count (pak successes are only known here).
+          delivered <- sum(vapply(
+            all_results, function(r) sum(r$status == "success"), integer(1)
+          ))
+          hero_js("count", delivered)
           depot_log_append(sprintf("Batch complete: %d package(s) [%s] → %s",
                                    length(b$pkgs), b$mode,
                                    basename(dirname(dirname(b$tgt)))))
@@ -568,11 +736,17 @@ mod_depot_ship_server <- function(id,
           type = "message", duration = 10
         )
         if (is.function(refresh_after_ship)) {
-          try(refresh_after_ship(), silent = TRUE)
+          depot_log_append("Refreshing comparison tables (rescanning the shipped-into library) ...")
+          awaiting_refresh(TRUE)
+          # Only the shipped-into libraries changed; the shared scan cache
+          # still holds everything else, so the refresh re-scans the minimum.
+          changed_tgts <- unique(vapply(batches, function(b) b$tgt, character(1)))
+          try(refresh_after_ship(changed = changed_tgts), silent = TRUE)
         }
         # Clear the selection so the shipped packages aren't accidentally re-sent.
         shinyjs::runjs(sprintf("courierDepotSelectAll('%s', false);", ns("ship_table")))
       }
+      hero_js("stop")
     })
 
     # ── Log pane (mirrors Bulk Dispatch) ───────────────────────────────────

@@ -1,5 +1,23 @@
 # Internal utility functions for courieR
 
+#' Environment for launching a *different* R installation
+#'
+#' The parent R session always exports R_LIBS_USER (and often R_LIBS /
+#' R_LIBS_SITE / R_HOME) into its process environment. A child R launched via
+#' processx inherits them, reports the PARENT's library via .libPaths(), and
+#' emits "WARNING: ignoring environment value of R_HOME" noise on stdout. Every
+#' subprocess that probes or installs into another R installation must use this
+#' environment so the child resolves its OWN libraries.
+#'
+#' @return Named character vector for `processx::run(env = )`.
+#' @noRd
+child_r_env <- function() {
+  cur  <- Sys.getenv()
+  nm   <- names(cur)
+  keep <- !(nm %in% c("R_LIBS_USER", "R_LIBS", "R_LIBS_SITE", "R_HOME"))
+  c(stats::setNames(as.character(cur)[keep], nm[keep]), R_HOME = "")
+}
+
 #' Create a standardized status list
 #'
 #' @param status Character: "success", "error", etc.

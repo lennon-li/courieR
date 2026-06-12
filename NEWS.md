@@ -1,3 +1,49 @@
+# courieR 0.3.1 (development)
+
+## Bug fixes
+
+* Fixed shipped packages never showing up as installed: `find_target_lib()`
+  and the pak install subprocess inherited the parent R session's
+  `R_LIBS_USER`, so `ship()` installed into the *parent's* library while
+  Compare scanned the real target. All subprocesses that launch another R now
+  share one environment-stripping helper (`child_r_env()`), and the install
+  destination is guaranteed to be a library that `manifest()` scans.
+* Library scans that time out are no longer cached as "empty library" for the
+  rest of the session; timeouts are reported loudly in the log and the scan
+  timeout was raised from 30 s to 5 min for slow machines.
+* The "both installations share one library" warning no longer fires
+  vacuously when both scans returned no packages.
+
+## Routing
+
+* Online mode now means online: every package resolvable from CRAN /
+  Bioconductor / GitHub is reinstalled via pak (binaries preferred). Only
+  local/private packages with no online source are copied from the source
+  library. (Previously pure-R CRAN packages were file-copied even in online
+  mode, which is much slower than pak on synced/network libraries.)
+
+## Performance
+
+* One manifest scan per library per session, shared across all tabs: a ship
+  right after Compare reuses the Compare scans and spawns no scan
+  subprocesses; the post-ship refresh rescans only the shipped-into library.
+
+## Dashboard UX
+
+* Custom Dispatch shows a live green hero panel while shipping: packages
+  delivered so far, the package currently being copied/installed, elapsed
+  time, and the estimated total.
+* Time estimates (plan summary, ship confirmation, preview invoice) now come
+  from per-machine calibrated rates persisted across sessions — every
+  completed ship updates them — instead of fixed constants that were off by
+  100x on synced/network drives.
+* Custom Dispatch source/target header now shows the R version, install
+  location, and library path of both installations (was the bare executable
+  path).
+* After a Custom Dispatch shipment the comparison tables refresh
+  automatically and the depot log says so; the refresh is logged when it
+  completes.
+
 # courieR 0.3.0
 
 ## Dashboard UX

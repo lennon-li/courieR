@@ -268,46 +268,52 @@ test_that("ship() reuses provided manifests and skips scanning", {
   expect_true(res$dry_run)
 })
 
-test_that("ship() online mode copies pure-R CRAN packages instead of invoking pak", {
+test_that("ship() online mode reinstalls resolvable packages via pak and copies only unknown-source", {
   skip_if_not_installed("mockery")
 
-  pak_called <- FALSE
+  pak_plan_seen  <- NULL
   copy_plan_seen <- NULL
 
   pure_r_lib <- file.path(tempdir(), "courieR_test_pure_r_pkg")
+  local_lib  <- file.path(tempdir(), "courieR_test_local_pkg")
   dir.create(pure_r_lib, recursive = TRUE, showWarnings = FALSE)
+  dir.create(local_lib, recursive = TRUE, showWarnings = FALSE)
 
   mockery::stub(ship, "fs::file_exists", function(...) TRUE)
   mockery::stub(ship, "manifest", function(...) {
-    data.table::data.table(package = "exact", version = "3.3", source = "CRAN")
+    data.table::data.table(
+      package = c("exact", "localpkg"),
+      version = c("3.3", "1.0"),
+      source  = c("CRAN", "unknown")
+    )
   })
   mockery::stub(ship, "inventory", function(...) {
     list(
       missing = data.table::data.table(
-        package = "exact",
-        version.x = "3.3",
-        source = "CRAN",
-        libpath = pure_r_lib
+        package   = c("exact", "localpkg"),
+        version.x = c("3.3", "1.0"),
+        source    = c("CRAN", "unknown"),
+        libpath   = c(pure_r_lib, local_lib)
       ),
       outdated = data.table::data.table(),
       comparison = data.table::data.table()
     )
   })
   mockery::stub(ship, "find_target_lib", function(...) tempdir())
-  mockery::stub(ship, ".run_pak_plan", function(...) {
-    pak_called <<- TRUE
-    data.table::data.table(package = character(), status = character(), message = character())
+  mockery::stub(ship, ".run_pak_plan", function(plan, ...) {
+    pak_plan_seen <<- plan
+    data.table::data.table(package = plan$package, status = "success", message = "pak completed")
   })
   mockery::stub(ship, "copy_packages", function(plan, target_lib, ...) {
     copy_plan_seen <<- plan
     data.table::data.table(package = plan$package, status = "success", message = "copied")
   })
 
-  res <- ship("dummy_src", "dummy_tgt", packages = "exact", dry_run = FALSE, mode = "online")
+  res <- ship("dummy_src", "dummy_tgt", dry_run = FALSE, mode = "online")
 
-  expect_false(pak_called)
-  expect_equal(copy_plan_seen$package, "exact")
-  expect_equal(res$results$message, "copied")
+  # CRAN package goes online even though it is pure R; local package is copied.
+  expect_equal(pak_plan_seen$package, "exact")
+  expect_equal(copy_plan_seen$package, "localpkg")
 })
 
 test_that("ship() passes upgrade flag through to pak for compiled online packages", {
@@ -353,4 +359,48 @@ test_that("ship() rejects invalid mode", {
     ship("dummy_src", "dummy_tgt", mode = "turbo"),
     "mode"
   )
+})
+
+test_that("find_target_lib ignores the parent session's R_LIBS_USER", {
+  # The parent R session always exports R_LIBS_USER. If the target Rscript
+  # inherits it, .libPaths()[1] reports the PARENT's library and ship()
+  # installs into the wrong place - packages then never show up in manifest()
+  # scans (which strip these vars), so Compare keeps reporting them missing.
+  rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  skip_if_not(file.exists(rscript), "Rscript not found")
+
+  decoy <- withr::local_tempdir(pattern = "courier-decoy-lib")
+  withr::local_envvar(R_LIBS_USER = decoy, R_LIBS = decoy)
+
+  lib <- find_target_lib(rscript)
+  expect_false(identical(normalizePath(lib, mustWork = FALSE),
+                         normalizePath(decoy, mustWork = FALSE)))
+})
+
+test_that("find_target_lib resolves the same library that manifest() scans", {
+  # ship() writes into find_target_lib(); Compare reads manifest(). If the two
+  # resolve different libraries, shipped packages are invisible to Compare.
+  rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  skip_if_not(file.exists(rscript), "Rscript not found")
+
+  decoy <- withr::local_tempdir(pattern = "courier-decoy-lib")
+  withr::local_envvar(R_LIBS_USER = decoy, R_LIBS = decoy)
+
+  tgt_lib <- find_target_lib(rscript)
+
+  # Same probe manifest() uses to enumerate the libraries it scans.
+  child_env <- local({
+    cur  <- Sys.getenv()
+    nm   <- names(cur)
+    keep <- !(nm %in% c("R_LIBS_USER", "R_LIBS", "R_LIBS_SITE", "R_HOME"))
+    c(stats::setNames(as.character(cur)[keep], nm[keep]), R_HOME = "")
+  })
+  lp_res <- processx::run(
+    rscript, c("--no-save", "-e", "cat(paste(.libPaths(), collapse = '\n'))"),
+    env = child_env, error_on_status = FALSE, timeout = 30
+  )
+  scanned_libs <- trimws(strsplit(trimws(lp_res$stdout), "\n")[[1]])
+
+  expect_true(normalizePath(tgt_lib, mustWork = FALSE) %in%
+                normalizePath(scanned_libs, mustWork = FALSE))
 })

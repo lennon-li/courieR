@@ -4,9 +4,15 @@
 #' @return Character scalar path to `.libPaths()[1L]` in the target R.
 #' @keywords internal
 find_target_lib <- function(target_path) {
+  # Strip the parent session's library env vars and use normal startup (the
+  # target reads its own .Renviron/.Rprofile) so this resolves the SAME library
+  # that manifest() scans. With --vanilla + inherited env, .libPaths()[1] was
+  # the parent's R_LIBS_USER - ship() then installed into a library that
+  # Compare never looks at, so shipped packages stayed "not installed".
   res <- processx::run(
     target_path,
-    c("--vanilla", "--no-save", "-e", "cat(.libPaths()[1L])"),
+    c("--no-save", "-e", "cat(.libPaths()[1L])"),
+    env = child_r_env(),
     error_on_status = FALSE
   )
   out <- trimws(res$stdout)
@@ -24,6 +30,7 @@ find_target_lib <- function(target_path) {
     processx::run(
       rscript_path,
       c("--vanilla", "--no-save", "-e", "cat(R.version$major)"),
+      env = child_r_env(),
       error_on_status = FALSE,
       timeout = 5
     ),
@@ -121,9 +128,13 @@ find_target_lib <- function(target_path) {
     # destabilise and abort the host R session. The full output is still
     # captured in `res$stdout`/`res$stderr` for the failure message below, and
     # the milestone/summary messages around this call still reach the UI.
+    # child_r_env(): without it the target R inherits the parent's R_LIBS_USER,
+    # sees the parent's library on .libPaths(), and pak can wrongly treat
+    # dependencies as already installed.
     res <- processx::run(
       target_path,
       c("--vanilla", install_script_file, install_args_file),
+      env = child_r_env(),
       error_on_status = FALSE,
       stdout_line_callback = function(line, proc) cat(line, "\n", sep = ""),
       stderr_line_callback = function(line, proc) cat(line, "\n", sep = "", file = stderr())
@@ -299,34 +310,28 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   if (mode == "online") {
     target_lib <- find_target_lib(target_path)
 
-    # Avoid recompiling/redownloading wherever it is safe:
-    #   * Pure-R packages (no compiled code) are ABI-independent - copy them
-    #     directly from the source library, even across R versions. No download,
-    #     no compile.
-    #   * Local/private packages (source "unknown") can't be fetched online  - 
-    #     copy them too (also keeps one un-findable package from poisoning pak's
-    #     atomic solve).
-    #   * Only packages that are BOTH resolvable online AND have compiled code
-    #     go through pak, which must rebuild them for the target R (binary
-    #     preferred - see .run_pak_plan).
-    plan_meta  <- .copy_plan(plan)
-    compiled   <- plan_meta$compiled[match(plan$package, plan_meta$package)]
-    compiled[is.na(compiled)] <- FALSE
+    # Online mode means online: every package resolvable from a repository
+    # (CRAN / Bioconductor / GitHub) is reinstalled via pak in one atomic
+    # solve - binaries preferred, built for the target R. Only local/private
+    # packages (source "unknown") are copied from the source library: they
+    # cannot be fetched online, and keeping them out of the solve stops one
+    # un-findable package from failing the whole installation. File copies
+    # can also be far slower than pak on synced/network libraries, so they
+    # are reserved for packages with no online route.
     resolvable <- !is.na(plan$source) & plan$source %in% c("CRAN", "Bioconductor", "GitHub")
 
-    needs_pak     <- resolvable & compiled
-    online_plan   <- plan[needs_pak, ]
-    copy_plan_all <- plan[!needs_pak, ]
+    online_plan   <- plan[resolvable, ]
+    copy_plan_all <- plan[!resolvable, ]
 
     if (nrow(copy_plan_all) > 0 && is.function(log_callback)) {
       try(log_callback(sprintf(
-        "Copying %d package(s) directly from the source library (pure-R or local - no rebuild needed): %s",
+        "Copying %d local/private package(s) directly from the source library (no online source): %s",
         nrow(copy_plan_all), paste(copy_plan_all$package, collapse = ", ")
       )), silent = TRUE)
     }
     if (nrow(online_plan) > 0 && is.function(log_callback)) {
       try(log_callback(sprintf(
-        "Reinstalling %d compiled package(s) via pak (binary preferred): %s",
+        "Reinstalling %d package(s) via pak (binary preferred): %s",
         nrow(online_plan), paste(online_plan$package, collapse = ", ")
       )), silent = TRUE)
     }

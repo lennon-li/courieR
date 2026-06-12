@@ -114,7 +114,8 @@ mod_sync_server <- function(id,
                             actionable_out     = NULL,
                             sync_direction_out = NULL,
                             transfer_mode_out  = NULL,
-                            refresh_request    = NULL) {
+                            refresh_request    = NULL,
+                            shared_scans       = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending_sync     <- reactiveVal(NULL)
@@ -130,20 +131,36 @@ mod_sync_server <- function(id,
 
     # Session cache of manifest() scans keyed by Rscript path, so Compare/Ship/
     # Preview reuse a library scan instead of re-spawning a subprocess each time.
-    # Invalidated for a target after a ship (its library changed).
-    manifest_cache <- reactiveVal(list())
+    # Invalidated for a target after a ship (its library changed). When the app
+    # provides `shared_scans`, the cache is shared with Custom Dispatch so a
+    # ship there never rescans what Compare already scanned (and vice versa).
+    manifest_cache <- reactiveVal(list())  # local fallback (tests)
     get_manifest <- function(path, force = FALSE) {
+      if (!is.null(shared_scans)) {
+        return(shared_scans$get(path, force = force, log = add_sync_log))
+      }
       cache <- isolate(manifest_cache())
       if (!force && !is.null(cache[[path]])) return(cache[[path]])
-      m <- courieR::manifest(rscript_path = path)
-      cache[[path]] <- m
-      manifest_cache(cache)
+      # Generous timeout: cold Windows R spawns + antivirus scanning can push a
+      # library scan well past manifest()'s 30s default on slow machines.
+      m <- courieR::manifest(rscript_path = path, timeout_sec = 300L)
+      # Never cache a timed-out scan: it is an empty table, and serving it from
+      # cache makes every later Compare instantly report "no packages found".
+      if (!isTRUE(attr(m, "timed_out"))) {
+        cache[[path]] <- m
+        manifest_cache(cache)
+      }
       m
     }
     invalidate_manifest <- function(path) {
+      if (!is.null(shared_scans)) return(shared_scans$invalidate(path))
       cache <- isolate(manifest_cache())
       cache[[path]] <- NULL
       manifest_cache(cache)
+    }
+    clear_manifests <- function() {
+      if (!is.null(shared_scans)) return(shared_scans$clear())
+      manifest_cache(list())
     }
 
     # Short, human-distinguishable form of a library path: its last two path
@@ -473,16 +490,12 @@ mod_sync_server <- function(id,
                 target_path = target_path, packages = pkgs))
     }
 
-    estimate_sync_time <- function(package_count) {
-      if (package_count <= 0) {
-        return("less than 1 minute")
-      }
-
-      # ~8-25 seconds per package via pak (network + compile)
-      min_minutes <- ceiling(max(1, package_count * 8 / 60))
-      max_minutes <- ceiling(max(min_minutes + 1, package_count * 25 / 60))
-
-      sprintf("%d-%d minutes", min_minutes, max_minutes)
+    # Estimate for the sync log line: same calibrated engine as the invoice.
+    estimate_sync_time <- function(packages, source_path, mode) {
+      tryCatch(
+        invoice_batch(packages, source_path, mode)$secs_text,
+        error = function(e) "unknown"
+      )
     }
 
     # Classify the packages of one batch into cost tiers, mirroring ship()'s
@@ -491,41 +504,50 @@ mod_sync_server <- function(id,
     #   copy   — pure-R or local: copied directly (no download, no compile)
     #   binary — compiled CRAN package: reinstalled from a pre-built binary
     #   source — compiled Bioconductor/GitHub: must compile from source (slow)
+    # Mirrors ship()'s routing: online mode reinstalls every repository-
+    # resolvable package via pak; only local/unknown-source packages are
+    # copied. Time comes from per-machine calibrated rates (estimate.R) -
+    # static constants were off by 100x on slow synced/network libraries.
     invoice_batch <- function(packages, source_path, mode) {
       n <- length(packages)
-      if (n == 0) return(list(copy = 0L, binary = 0L, source = 0L, secs = 0))
+      if (n == 0) return(list(copy = 0L, binary = 0L, source = 0L, secs = 0, secs_text = "~0s"))
       if (mode %in% c("offline", "preserve")) {
-        return(list(copy = n, binary = 0L, source = 0L, secs = n * 0.5))
+        est <- courieR:::estimate_ship_secs(n_copy = n)
+        return(list(copy = n, binary = 0L, source = 0L,
+                    secs = est$high, secs_text = est$text))
       }
       src <- data.table::as.data.table(get_manifest(source_path))
       rows <- src[match(packages, src$package), ]
-      libpath <- if ("libpath" %in% names(rows)) rows$libpath else rep(NA_character_, n)
       src_col <- if ("source" %in% names(rows)) rows$source else rep(NA_character_, n)
-      compiled <- !is.na(libpath) & nzchar(libpath) & file.exists(file.path(libpath, "libs"))
       resolvable <- !is.na(src_col) & src_col %in% c("CRAN", "Bioconductor", "GitHub")
-      needs_pak  <- resolvable & compiled
-      is_source  <- needs_pak & src_col %in% c("Bioconductor", "GitHub")
-      is_binary  <- needs_pak & !is_source
-      is_copy    <- !needs_pak
+      is_source  <- resolvable & src_col %in% c("Bioconductor", "GitHub")
+      is_binary  <- resolvable & !is_source
+      is_copy    <- !resolvable
+      est <- courieR:::estimate_ship_secs(
+        n_copy = sum(is_copy), n_binary = sum(is_binary), n_source = sum(is_source)
+      )
       list(
         copy   = sum(is_copy),
         binary = sum(is_binary),
         source = sum(is_source),
-        secs   = sum(is_copy) * 0.5 + sum(is_binary) * 5 + sum(is_source) * 45
+        secs   = est$high,
+        secs_text = est$text
       )
     }
 
     # Aggregate the invoice across the source → target batch of a pending plan.
     build_invoice <- function(plan, mode) {
       batches <- list(list(packages = plan$packages, source_path = plan$source_path))
-      tot <- list(copy = 0L, binary = 0L, source = 0L, secs = 0)
+      tot <- list(copy = 0L, binary = 0L, source = 0L)
       for (b in batches) {
         inv <- invoice_batch(b$packages, b$source_path, mode)
         tot$copy   <- tot$copy   + inv$copy
         tot$binary <- tot$binary + inv$binary
         tot$source <- tot$source + inv$source
-        tot$secs   <- tot$secs   + inv$secs
       }
+      est <- courieR:::estimate_ship_secs(tot$copy, tot$binary, tot$source)
+      tot$secs      <- est$high
+      tot$secs_text <- est$text
       tot
     }
 
@@ -553,8 +575,13 @@ mod_sync_server <- function(id,
     }
 
     log_libpaths <- function(label, pkgs) {
+      if (isTRUE(attr(pkgs, "timed_out"))) {
+        add_sync_log(label, ": SCAN TIMED OUT - the R subprocess did not respond in time. ",
+                     "The result below is incomplete; click Compare to retry.")
+        return(invisible(NULL))
+      }
       if (is.null(pkgs) || !"libpath" %in% names(pkgs) || nrow(pkgs) == 0) {
-        add_sync_log(label, ": no packages found.")
+        add_sync_log(label, ": no user packages found (library is empty or has only base/recommended packages).")
         return(invisible(NULL))
       }
       libs <- unique(pkgs$libpath)
@@ -576,7 +603,10 @@ mod_sync_server <- function(id,
       set_sync_progress(pct_base + pct_span * 0.55, "Scanning target installation", active = TRUE)
       b_pkgs <- get_manifest(b_path)
       log_libpaths("Target library", b_pkgs)
-      if (identical(sort(unique(a_pkgs$libpath)), sort(unique(b_pkgs$libpath)))) {
+      # Only meaningful when both scans actually found packages: two empty
+      # scans have identical (empty) libpath sets and would warn vacuously.
+      if (nrow(a_pkgs) > 0 && nrow(b_pkgs) > 0 &&
+          identical(sort(unique(a_pkgs$libpath)), sort(unique(b_pkgs$libpath)))) {
         add_sync_log("WARNING: both installations resolve to the SAME library path. ",
                      "They share a package library (likely via R_LIBS_USER in .Renviron), ",
                      "so every package will compare as identical.")
@@ -653,7 +683,7 @@ mod_sync_server <- function(id,
     load_routes <- function() {
       detecting(TRUE)
       detection_status(NULL)
-      manifest_cache(list())  # fresh detection → drop any cached library scans
+      clear_manifests()  # fresh detection → drop any cached library scans
       add_sync_log("Scanning for R installations...")
       tryCatch({
         r <- sort_routes(courieR::find_routes())
@@ -1125,8 +1155,11 @@ mod_sync_server <- function(id,
           return()
         }
 
-        invalidate_manifest(src_path)
-        invalidate_manifest(tgt_path)
+        # Only the shipped-into libraries changed; the shared scan cache still
+        # holds fresh scans for everything else, so the refresh re-scans the
+        # minimum (usually just the target).
+        changed <- req$changed_paths %||% c(src_path, tgt_path)
+        for (p in changed) invalidate_manifest(p)
         add_sync_log("─────── Refresh ───────")
         add_sync_log("Custom Dispatch completed; refreshing all comparison tables.")
         set_sync_progress(0, "Refreshing tables after Custom Dispatch", active = TRUE)
@@ -1297,13 +1330,13 @@ mod_sync_server <- function(id,
           div(
             class = "invoice-card",
             div(class = "invoice-head", "Estimate"),
-            line("to be copied",   inv$copy,   "invoice-copy",   "pure-R / local — no download or compile"),
-            line("to be installed", inv$binary, "invoice-binary", "compiled CRAN — pre-built binary"),
+            line("to be copied",   inv$copy,   "invoice-copy",   "local / private — no online source"),
+            line("to be installed", inv$binary, "invoice-binary", "CRAN — pre-built binary via pak"),
             line("to be compiled",  inv$source, "invoice-source", "Bioconductor / GitHub — slow"),
             div(
               class = "invoice-total",
               tags$span("Estimated time"),
-              tags$span(class = "invoice-total-val", fmt_duration(inv$secs))
+              tags$span(class = "invoice-total-val", inv$secs_text %||% fmt_duration(inv$secs))
             )
           )
         ),
@@ -1347,12 +1380,11 @@ mod_sync_server <- function(id,
       }
       src <- data.table::as.data.table(get_manifest(source_path))
       rows <- src[match(packages, src$package), ]
-      libpath <- if ("libpath" %in% names(rows)) rows$libpath else rep(NA_character_, n)
       src_col <- if ("source" %in% names(rows)) rows$source else rep(NA_character_, n)
-      compiled   <- !is.na(libpath) & nzchar(libpath) & file.exists(file.path(libpath, "libs"))
+      # Online mode reinstalls everything resolvable from a repository; only
+      # local/unknown-source packages are copied (mirrors ship()).
       resolvable <- !is.na(src_col) & src_col %in% c("CRAN", "Bioconductor", "GitHub")
-      needs_pak  <- resolvable & compiled
-      route <- ifelse(!needs_pak, "copied",
+      route <- ifelse(!resolvable, "copied",
                 ifelse(src_col %in% c("Bioconductor", "GitHub"), "compiled from source", "binary install"))
       data.frame(package = packages, route = route, stringsAsFactors = FALSE)
     }
@@ -1382,7 +1414,7 @@ mod_sync_server <- function(id,
       n_copy   <- sum(rows$route == "copied")
       n_binary <- sum(rows$route == "binary install")
       n_source <- sum(rows$route == "compiled from source")
-      secs     <- n_copy * 0.5 + n_binary * 5 + n_source * 45
+      est      <- courieR:::estimate_ship_secs(n_copy, n_binary, n_source)
 
       # Always render all three tiers so the preview answers "how many copied /
       # installed / compiled" at a glance; zero-count tiers are muted, not hidden.
@@ -1415,12 +1447,12 @@ mod_sync_server <- function(id,
           div(
             class = "invoice-card",
             div(class = "invoice-head", "Estimate"),
-            line("to be copied",   n_copy,   "invoice-copy",   "pure-R / local — no download or compile"),
-            line("to be installed", n_binary, "invoice-binary", "compiled CRAN — pre-built binary"),
+            line("to be copied",   n_copy,   "invoice-copy",   "local / private — no online source"),
+            line("to be installed", n_binary, "invoice-binary", "CRAN — pre-built binary via pak"),
             line("to be compiled",  n_source, "invoice-source", "Bioconductor / GitHub — slow"),
             div(class = "invoice-total",
                 tags$span("Estimated time"),
-                tags$span(class = "invoice-total-val", fmt_duration(secs)))
+                tags$span(class = "invoice-total-val", est$text))
           ),
           DT::dataTableOutput(ns("preview_dt"))
         ),
@@ -1496,7 +1528,9 @@ mod_sync_server <- function(id,
         failed_count <- 0L
         accumulated_results <- list()
         accumulated_plans   <- list()
-        add_sync_log("Estimated sync time: ", estimate_sync_time(total_count), ".")
+        add_sync_log("Estimated sync time: ",
+                     estimate_sync_time(plan$packages, plan$source_path, input$transfer_mode),
+                     " (calibrates from each completed ship).")
         batch_progress <- if (length(batches) == 0) 0 else 65 / length(batches)
         progress_start <- 10
 
@@ -1575,6 +1609,20 @@ mod_sync_server <- function(id,
           data.table::data.table(package = character(), action = character())
 
         elapsed <- as.numeric(difftime(Sys.time(), ship_start_time, units = "secs"))
+        # Calibrate the time estimator from what actually happened, when the
+        # ship was single-route (otherwise attribution is ambiguous).
+        if (nrow(all_results) > 0 && elapsed > 0) {
+          msgs <- all_results$message %||% rep("", nrow(all_results))
+          n_ok    <- sum(all_results$status == "success")
+          n_copy_ok <- sum(all_results$status == "success" &
+                             grepl("copied", msgs, ignore.case = TRUE))
+          if (n_ok > 0) {
+            route <- if (n_copy_ok == n_ok) "copy" else if (n_copy_ok == 0) "binary" else NA_character_
+            if (!is.na(route)) {
+              try(courieR:::record_ship_rate(route, elapsed / n_ok), silent = TRUE)
+            }
+          }
+        }
         # Overall summary to the log panel (replaces the old receipt panel).
         if (nrow(all_results) > 0) {
           st  <- all_results$status
@@ -1740,12 +1788,11 @@ mod_sync_server <- function(id,
       removeModal()
       if (is.null(plan) || length(plan$cran_pkgs) == 0) { stop_busy(); return() }
 
-      lib_res <- processx::run(
-        plan$path, c("--vanilla", "-e", "cat(.libPaths()[1])"),
-        error_on_status = FALSE
-      )
-      tgt_lib <- trimws(lib_res$stdout)
-      if (lib_res$status != 0 || !nzchar(tgt_lib)) {
+      # find_target_lib strips the parent session's R_LIBS_USER and lets the
+      # target read its own startup files, so restock installs into the same
+      # library that manifest()/Compare scans.
+      tgt_lib <- tryCatch(courieR:::find_target_lib(plan$path), error = function(e) "")
+      if (!nzchar(tgt_lib)) {
         stop_busy()
         showNotification("Could not determine library path.", type = "error")
         return()
