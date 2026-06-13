@@ -18,11 +18,11 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Lennon Li \email{yeli@biostats.ai}
+\strong{Maintainer}: Lennon Li \email{yeli@biostats.ai} (\href{https://orcid.org/0000-0001-6338-7474}{ORCID})
 
 Authors:
 \itemize{
-  \item Lennon Li \email{yeli@biostats.ai}
+  \item Lennon Li \email{yeli@biostats.ai} (\href{https://orcid.org/0000-0001-6338-7474}{ORCID})
 }
 
 }

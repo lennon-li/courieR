@@ -1,4 +1,4 @@
-# courieR 0.3.1 (development)
+# courieR 0.3.1
 
 ## Bug fixes
 
@@ -48,6 +48,24 @@
 
 ## Dashboard UX
 
+* **Bulk Dispatch** now shows a live hero panel during shipping (matching
+  Custom Dispatch): packages delivered so far, the current package being
+  installed, elapsed time, and the estimated total. The detailed log in the
+  R console is also mirrored in the dashboard log pane.
+* Both **Bulk Dispatch** and **Custom Dispatch** tables now default to
+  showing only packages missing from the target after Compare, instead of
+  all diff statuses. The filter chip bar lets you toggle other statuses.
+* **Custom Dispatch** filter chips are now colour-coded — orange for
+  source-side differences (newer in source, not in target), teal for
+  target-side differences — matching Bulk Dispatch.
+* **Custom Dispatch** comparison table gains a **Repo** column showing where
+  the package comes from (CRAN, Bioconductor, GitHub, etc.). Packages with
+  an unknown source are shown in red in both tables.
+* `report_issue()` — new exported function. Call it from the console after
+  any error to open a pre-filled GitHub issue form in your browser with your
+  R version, platform, courieR version, and the error message already
+  populated. The dashboard's error modal gains a **Send Report** button that
+  does the same in one click.
 * Custom Dispatch shows a live green hero panel while shipping: packages
   delivered so far, the package currently being copied/installed, elapsed
   time, and the estimated total.
@@ -61,6 +79,8 @@
 * After a Custom Dispatch shipment the comparison tables refresh
   automatically and the depot log says so; the refresh is logged when it
   completes.
+* `library(courieR)` startup message now includes a link to the user guide
+  vignette (`vignette("get-started", package = "courieR")`).
 
 # courieR 0.3.0
 

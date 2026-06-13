@@ -4,13 +4,25 @@
 [![R-CMD-check](https://github.com/lennon-li/courieR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/lennon-li/courieR/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/lennon-li/courieR/actions/workflows/pkgdown.yaml/badge.svg)](https://lennon-li.github.io/courieR/)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+![AI-implemented](https://img.shields.io/badge/AI--implemented-Claude%20Code-7C3AED)
 <!-- badges: end -->
 
 courieR syncs installed R packages between R versions on the same machine — migrate from old to new, or selectively copy packages from a source installation into a target installation. No manual reinstalling, no lost libraries.
 
+> This package is fully AI-implemented — designed, coded, and documented by
+> [Claude Code](https://claude.ai/code) — with the author directing
+> requirements, reviewing every decision, and owning the outcome. A
+> proof-of-concept for human–AI co-authorship in open-source R.
+
 ## Installation
 
-Install from GitHub (CRAN submission in progress):
+Install from CRAN:
+
+```r
+install.packages("courieR")
+```
+
+Or install the development version from GitHub:
 
 ```r
 pak::pkg_install("lennon-li/courieR")

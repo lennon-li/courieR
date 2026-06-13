@@ -27,6 +27,30 @@ mod_sync_ui <- function(id) {
        if(el&&window.__courierTimerStart) el.textContent=window.courierFmt(Date.now()-window.__courierTimerStart);
      };"
   )),
+  tags$script(HTML(sprintf(
+    "(function(){
+       var heroId='%s', _iv=null, _t0=null;
+       function el(sfx){ return document.getElementById(heroId+sfx); }
+       function fmt(s){ var m=Math.floor(s/60); return m>0?(m+'m '+(s%%60)+'s'):(s+'s'); }
+       window.courierBulkHero={
+         start:function(total,est){
+           var h=el(''); if(!h) return;
+           h.style.display='block';
+           h.innerHTML=
+             '<div class=\"depot-hero-kicker\">Shipping in progress</div>'+
+             '<div class=\"depot-hero-main\"><span id=\"'+heroId+'_count\">0</span> / '+total+' delivered</div>'+
+             '<div class=\"depot-hero-pkg\" id=\"'+heroId+'_pkg\">Preparing shipment\\u2026</div>'+
+             '<div class=\"depot-hero-meta\"><span id=\"'+heroId+'_timer\">0s</span> elapsed \\u00b7 estimated '+est+'</div>';
+           _t0=Date.now(); clearInterval(_iv);
+           _iv=setInterval(function(){ var t=el('_timer'); if(t) t.textContent=fmt(Math.floor((Date.now()-_t0)/1000)); },1000);
+         },
+         status:function(txt){ var p=el('_pkg'); if(p) p.textContent=txt; },
+         count: function(k){   var c=el('_count'); if(c) c.textContent=k; },
+         stop:  function(){ clearInterval(_iv); _iv=null; var h=el(''); if(h) h.style.display='none'; }
+       };
+     })()",
+    ns("bulk_hero")
+  ))),
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
@@ -85,6 +109,7 @@ mod_sync_ui <- function(id) {
           ),
           div(
             class = "sync-log-pane",
+            tags$div(id = ns("bulk_hero"), class = "depot-hero", style = "display:none;"),
             uiOutput(ns("sync_log"))
           )
         )
@@ -1129,9 +1154,7 @@ mod_sync_server <- function(id,
         refresh_comparison(src_path, tgt_path, progress_detail = "Starting comparison")
         comp <- comparison_data()
         diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
-        if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
-          selected_statuses(diff_statuses)
-        }
+        selected_statuses(c("missing-from-target"))
         if (is.function(comparison_out)) comparison_out(comparison_data())
         diff_n <- sum(comparison_data()[["status"]] != "same")
         if (is.function(actionable_out)) actionable_out(diff_n)
@@ -1171,12 +1194,7 @@ mod_sync_server <- function(id,
             progress_detail = "Refreshing tables after Custom Dispatch"
           )
           comp <- comparison_data()
-          diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
-          if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
-            selected_statuses(diff_statuses)
-          } else {
-            selected_statuses(NULL)
-          }
+          selected_statuses(c("missing-from-target"))
           if (is.function(comparison_out)) comparison_out(comp)
           diff_n <- if (is.null(comp)) 0L else sum(comp[["status"]] != "same")
           if (is.function(actionable_out)) actionable_out(diff_n)
@@ -1297,6 +1315,11 @@ mod_sync_server <- function(id,
             c("same", diff_statuses),
             c("400", "600", "600", "600", "600")
           )
+        ) |>
+        DT::formatStyle(
+          "source",
+          color = DT::styleEqual("unknown", "#c0392b"),
+          fontWeight = DT::styleEqual("unknown", "600")
         )
     })
 
@@ -1508,11 +1531,41 @@ mod_sync_server <- function(id,
 
       add_sync_log("─────── Ship ───────")
       add_sync_log("Preparing sync plan.")
-      add_sync_log("Tip: real-time output is shown in the RStudio console — monitor there, then return here for the summary.")
+      add_sync_log("Tip: real-time output is shown in the R console — monitor there, then return here for the summary.")
       add_sync_log("Base and recommended R packages are skipped; only user-installed packages are compared/synced.")
       add_sync_log("Current comparison before sync: ", comparison_counts_text(comparison_data()), ".")
 
       ship_start_time <- Sys.time()
+
+      # Hero panel helpers (live "X/Y delivered" panel in the log pane).
+      hero_js <- function(fn, arg = NULL) {
+        arg_js <- if (is.null(arg)) "" else jsonlite::toJSON(arg, auto_unbox = TRUE)
+        try(shinyjs::runjs(sprintf(
+          "if(window.courierBulkHero) window.courierBulkHero.%s(%s);", fn, arg_js
+        )), silent = TRUE)
+      }
+      bulk_delivered <- 0L
+      bulk_ship_log_cb <- function(...) {
+        add_sync_log(...)
+        msg <- paste0(...)
+        m <- regmatches(msg, regexec("^\\[(\\d+)/(\\d+)\\] (\\S+) - copying", msg))[[1]]
+        if (length(m) == 4L) {
+          hero_js("status", sprintf("Copying %s (%s/%s)…", m[[4]], m[[2]], m[[3]]))
+          return(invisible(NULL))
+        }
+        m2 <- regmatches(msg, regexec("^\\[ok\\] (\\S+) - copied", msg))[[1]]
+        if (length(m2) == 2L) {
+          bulk_delivered <<- bulk_delivered + 1L
+          hero_js("count", bulk_delivered)
+          hero_js("status", sprintf("%s delivered", m2[[2]]))
+          return(invisible(NULL))
+        }
+        if (grepl("^Reinstalling \\d+ package", msg))
+          hero_js("status", "Installing via pak — live output in R console…")
+        else if (grepl("^pak subprocess finished successfully", msg))
+          hero_js("status", "pak finished; verifying target library…")
+        invisible(NULL)
+      }
 
       result <- tryCatch({
         set_sync_progress(5, "Preparing sync plan", active = TRUE)
@@ -1528,9 +1581,13 @@ mod_sync_server <- function(id,
         failed_count <- 0L
         accumulated_results <- list()
         accumulated_plans   <- list()
-        add_sync_log("Estimated sync time: ",
-                     estimate_sync_time(plan$packages, plan$source_path, input$transfer_mode),
-                     " (calibrates from each completed ship).")
+        bulk_est_text <- estimate_sync_time(plan$packages, plan$source_path, input$transfer_mode)
+        add_sync_log("Estimated sync time: ", bulk_est_text, " (calibrates from each completed ship).")
+        try(shinyjs::runjs(sprintf(
+          "if(window.courierBulkHero) window.courierBulkHero.start(%d, %s);",
+          length(plan$packages),
+          jsonlite::toJSON(bulk_est_text %||% "?", auto_unbox = TRUE)
+        )), silent = TRUE)
         batch_progress <- if (length(batches) == 0) 0 else 65 / length(batches)
         progress_start <- 10
 
@@ -1562,7 +1619,7 @@ mod_sync_server <- function(id,
             # FALSE still brings the named packages to the latest compatible
             # version; TRUE would also upgrade every dependency in the target.
             upgrade = FALSE,
-            log_callback = add_sync_log,
+            log_callback = bulk_ship_log_cb,
             mode = input$transfer_mode,
             source_pkgs = get_manifest(batch$source_path),
             target_pkgs = get_manifest(batch$target_path)
@@ -1648,6 +1705,7 @@ mod_sync_server <- function(id,
           ))
         }
 
+        hero_js("stop")
         set_sync_progress(80, "Refreshing comparison after sync", active = TRUE)
         add_sync_log("Refreshing comparison after sync.")
         refresh_comparison(
@@ -1695,9 +1753,7 @@ mod_sync_server <- function(id,
       }
 
       pending_sync(NULL)
-      # The table is refreshed after shipping; leave filters broad so any
-      # remaining differences are obvious.
-      selected_statuses(NULL)
+      selected_statuses(c("missing-from-target"))
       re_enable_compare()
       re_enable_btn("sync_btn")
     })

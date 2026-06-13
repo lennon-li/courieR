@@ -5,25 +5,46 @@
 Checked locally with `R CMD check --as-cran` under R 4.6.0 on Ubuntu 24.04
 (x86_64).
 
-## Changes in 0.3.0
+## Changes in 0.3.1
 
-This is an update release. Key changes:
+Bug fixes and dashboard UX improvements.
 
-* Dashboard navigation overhauled: three nested tab levels flattened to a
-  single row of five top-level tabs, with Source/Target terminology replacing
-  the former A/B labels.
+**Bug fixes**
 
-* Performance: `ship()` no longer upgrades the entire dependency tree of each
-  selected package by default, library scans are reused across transfer
-  batches, and pure-R packages are copied directly instead of reinstalled.
+* `.copy_plan()` now appends `<library>/<package>` as the copy source.
+  Previously it passed the bare library directory, so each copy cloned the
+  entire source library into `target/<pkg>/` — packages appeared delivered
+  but could not be loaded. Affects offline/preserve modes and the copy path
+  in online mode.
 
-* Bug fix: `manifest()` no longer leaks the parent R session's `R_LIBS_USER`
-  and `R_HOME` into the target R subprocess. Previously, every probed
-  installation reported the parent library, making distinct R versions appear
-  to share one library.
+* `find_routes()` probe timeout raised from 3 s to 30 s (default),
+  configurable via `options(courier.probe_timeout = )`. R cold-starts on
+  Windows machines with OneDrive/Defender active regularly exceed 3 s,
+  causing intermittent detection failures. Timed-out probes now warn instead
+  of silently dropping the installation.
 
-* Bug fix: unresolvable local packages are excluded from the pak install
-  batch, so they can no longer fail an entire sync.
+* Subprocess environment isolation: `find_routes()`, `manifest()`, and the
+  pak install subprocess now strip the parent session's `R_LIBS_USER` and
+  `R_LIBS_SITE` so each candidate R reports its own library path, not the
+  parent's.
+
+* Library scan timeouts are no longer cached as an empty library for the
+  rest of the session; they are reported loudly in the log and the timeout
+  was raised from 30 s to 5 min for slow machines.
+
+**New features**
+
+* `report_issue()` — opens a pre-filled GitHub issue form in the browser
+  with R version, platform, and error message already populated. The
+  dashboard error modal gains a matching **Send Report** button.
+
+* Bulk Dispatch now shows a live hero panel during shipping (package count,
+  current package, elapsed time, estimate), matching Custom Dispatch.
+
+* Both tables default to showing only packages missing from the target after
+  Compare. Custom Dispatch filter chips are now colour-coded to match Bulk
+  Dispatch. A **Repo** column is added to the Custom Dispatch table;
+  packages with an unknown source are shown in red in both tables.
 
 ## Notes to CRAN
 

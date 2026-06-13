@@ -322,10 +322,10 @@ mod_depot_ship_server <- function(id,
       div(
         class = "sync-summary-bar",
         make_chip("same",           "identical",        "chip-same"),
-        make_chip("newer-in-source",     "newer in source",  "chip-diff-a"),
-        make_chip("newer-in-target",     "newer in target",  "chip-diff-b"),
-        make_chip("missing-from-target", "not in target",    "chip-diff-a"),
-        make_chip("missing-from-source", "not in source",    "chip-diff-b")
+        make_chip("newer-in-source",     "newer in source",  "chip-diff-source"),
+        make_chip("newer-in-target",     "newer in target",  "chip-diff-target"),
+        make_chip("missing-from-target", "not in target",    "chip-diff-source"),
+        make_chip("missing-from-source", "not in source",    "chip-diff-target")
       )
     })
 
@@ -371,9 +371,16 @@ mod_depot_ship_server <- function(id,
         sprintf('<input type="checkbox" class="depot-ship-cb" data-rowidx="%d">', i),
         character(1))
 
+      repo_vals <- {
+        rs <- if ("repo_in_source" %in% names(visible)) visible[["repo_in_source"]] else rep(NA_character_, length(pkgs))
+        rt <- if ("repo_in_target" %in% names(visible)) visible[["repo_in_target"]] else rep(NA_character_, length(pkgs))
+        r <- ifelse(!is.na(rs) & nzchar(rs), rs, rt)
+        ifelse(is.na(r) | !nzchar(r), "unknown", r)
+      }
       display <- data.frame(
         ` `     = cbs,
         Package = pkgs,
+        Repo    = repo_vals,
         Source  = ifelse(is.na(visible[["version_in_source"]]),
                          "not installed", visible[["version_in_source"]]),
         Target  = ifelse(is.na(visible[["version_in_target"]]),
@@ -424,6 +431,11 @@ mod_depot_ship_server <- function(id,
             c("same",    "missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target"),
             c("#ffffff", "#fff6ef",        "#eefafb",        "#fff4ea",    "#edf8fb")
           )
+        ) |>
+        DT::formatStyle(
+          "Repo",
+          color = DT::styleEqual("unknown", "#c0392b"),
+          fontWeight = DT::styleEqual("unknown", "600")
         )
     })
 
