@@ -1,66 +1,59 @@
-## Resubmission (0.2.3)
-
-This is a resubmission with bug fixes, performance improvements, and UX enhancements.
-
-### Changes since 0.2.2
-
-* `manifest()` now excludes base and recommended packages via three guards: Priority
-  field, case-insensitive library path comparison (fixes silent failures on Windows
-  where path capitalisation differs), and a name list from
-  `installed.packages(priority = c("base", "recommended"))`. Packages such as
-  `translations` can no longer appear in a sync plan.
-
-* `ship()` gains an optional `log_callback` argument (function of one character
-  argument) for real-time progress messages from the pak subprocess. Existing callers
-  are unaffected; the argument defaults to `NULL`.
-
-* `hub()` added as a short exported alias for `open_hub()`.
-
-* `.onAttach()` added: prints the package version and a one-line usage hint when the
-  package is attached. Uses `packageStartupMessage()` so it respects
-  `suppressPackageStartupMessages()`.
-
-* `find_routes()` per-candidate subprocess timeout reduced from 5 s to 3 s.
-
-* `shinyjs` added to Imports (was missing; required for the real-time log DOM updates
-  in the Sync dashboard).
-
-* Sync dashboard: `withProgress()` / `incProgress()` / `shiny:::flushReact()` /
-  `later::run_now()` removed. Replaced with `shinyjs::runjs()` for immediate DOM
-  log appends and a `reactiveVal`-driven inline progress bar.
-
-## Test environments
-
-* local Windows 11, R 4.6.0 and R 4.5.2
-* GitHub Actions: ubuntu-latest (release, devel), windows-latest (release, devel), macos-latest (release)
-
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note
+0 errors | 0 warnings | 0 notes
 
-* NOTE: Imports includes packages only used in the Shiny app (`shiny`, `bslib`,
-  `bsicons`, `DT`, `shinyjs`). These are intentional runtime dependencies of
-  `open_hub()` / `hub()` and are checked at runtime before launching the app.
+Checked locally with `R CMD check --as-cran` under R 4.6.0 on Ubuntu 24.04
+(x86_64).
 
-## Reverse dependencies
+## Changes in 0.3.1
 
-There are no reverse dependencies.
+Bug fixes and dashboard UX improvements.
+
+**Bug fixes**
+
+* `.copy_plan()` now appends `<library>/<package>` as the copy source.
+  Previously it passed the bare library directory, so each copy cloned the
+  entire source library into `target/<pkg>/` — packages appeared delivered
+  but could not be loaded. Affects offline/preserve modes and the copy path
+  in online mode.
+
+* `find_routes()` probe timeout raised from 3 s to 30 s (default),
+  configurable via `options(courier.probe_timeout = )`. R cold-starts on
+  Windows machines with OneDrive/Defender active regularly exceed 3 s,
+  causing intermittent detection failures. Timed-out probes now warn instead
+  of silently dropping the installation.
+
+* Subprocess environment isolation: `find_routes()`, `manifest()`, and the
+  pak install subprocess now strip the parent session's `R_LIBS_USER` and
+  `R_LIBS_SITE` so each candidate R reports its own library path, not the
+  parent's.
+
+* Library scan timeouts are no longer cached as an empty library for the
+  rest of the session; they are reported loudly in the log and the timeout
+  was raised from 30 s to 5 min for slow machines.
+
+**New features**
+
+* `report_issue()` — opens a pre-filled GitHub issue form in the browser
+  with R version, platform, and error message already populated. The
+  dashboard error modal gains a matching **Send Report** button.
+
+* Bulk Dispatch now shows a live hero panel during shipping (package count,
+  current package, elapsed time, estimate), matching Custom Dispatch.
+
+* Both tables default to showing only packages missing from the target after
+  Compare. Custom Dispatch filter chips are now colour-coded to match Bulk
+  Dispatch. A **Repo** column is added to the Custom Dispatch table;
+  packages with an unknown source are shown in red in both tables.
 
 ## Notes to CRAN
 
-* `find_routes()` and `ship()` examples are wrapped in `\dontrun{}` because they
-  require multiple R installations on the same machine, which is not guaranteed in
-  CRAN check environments.
-* `rig_install()` example is `\dontrun{}` because it downloads and installs an R version.
-* `hub()` and `open_hub()` examples use `if (interactive())` because they launch
-  a Shiny application.
-* `manifest()` examples use `\donttest{}` because they spawn a subprocess.
-* `manifest()` runs package scanning in a subprocess. The script is written to a temp
-  file and cleaned via `on.exit()`. All tests calling `manifest()` are guarded with
+* `find_routes()`, `ship()`, and `manifest()` examples are wrapped in
+  `\donttest{}` because they probe for multiple R installations on the same
+  machine and spawn subprocesses.
+* `hub()`, `open_hub()`, and `rig_install()` examples run only
+  `if (interactive())`; the latter downloads and installs an R version.
+* Tests that spawn subprocesses or install packages are guarded with
   `skip_on_cran()`.
-* `ship()` runs `pak::pkg_install()` under the target R executable in a subprocess.
-  When `dry_run = TRUE`, no installation occurs.
-* All subprocess calls have explicit timeouts. All temporary files are cleaned via
-  `on.exit()`.
-* The package sets no `options()` or `par()`. The `.onAttach()` startup message uses
-  `packageStartupMessage()` and is suppressible.
+* The package sets no global `options()` or `par()`. The `.onAttach()`
+  startup message uses `packageStartupMessage()`.

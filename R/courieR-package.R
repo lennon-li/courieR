@@ -7,7 +7,8 @@
   packageStartupMessage(
     "courieR ", ver, "\n",
     "  Launch the dashboard : hub()\n",
-    "  CLI reference        : ?ship"
+    "  CLI reference        : ?ship\n",
+    "  User guide           : vignette(\"get-started\", package = \"courieR\")"
   )
 }
 

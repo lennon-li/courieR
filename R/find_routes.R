@@ -64,6 +64,11 @@
 #' Symlinks are resolved via `fs::path_real()` so that duplicate entries from
 #' different detection sources pointing to the same executable are collapsed.
 #'
+#' Each candidate is probed in a short subprocess. The probe timeout defaults
+#' to 30 seconds and can be adjusted via `options(courier.probe_timeout = )`;
+#' installations whose probe times out are skipped with a warning rather than
+#' silently dropped.
+#'
 #' @examples
 #' \donttest{
 #' routes <- find_routes()
@@ -177,7 +182,7 @@ find_routes <- function(search_paths = NULL) {
   # Supplement with any rig-managed versions not already caught by directory scans
   if (rig_available()) {
     rig_versions <- tryCatch({
-      res <- processx::run("rig", "list", error_on_status = FALSE, timeout = 5)
+      res <- processx::run("rig", "list", error_on_status = FALSE, timeout = 15)
       if (res$status == 0) {
         lines <- trimws(strsplit(res$stdout, "\n")[[1]])
         lines <- sub("^\\*\\s*", "", lines)  # strip leading star (marks current version)
@@ -234,19 +239,30 @@ find_routes <- function(search_paths = NULL) {
   probe_env <- probe_env[!names(probe_env) %in% c("R_LIBS_USER", "R_LIBS_SITE", "R_LIBS")]
   probe_env["R_HOME"] <- ""
 
+  # Probe timeout: generous by default because on slow machines (antivirus,
+  # OneDrive-synced installs) a cold R start can take well over the 3s this
+  # used to be, which made real installations flicker in and out of the
+  # detected list between runs. Timed-out probes are reported, never silent.
+  probe_timeout <- getOption("courier.probe_timeout", 30)
+  timed_out <- character(0)
+
   res_list <- lapply(candidates, function(rscript) {
     script <- 'cat(R.version$major, "||SEP||", R.version$minor, "||SEP||", R.home(), "||SEP||", paste(.libPaths(), collapse = "||LIB||"), sep = "")'
     out <- tryCatch(
       processx::run(
         rscript, c("--vanilla", "-e", script),
         env    = probe_env,
-        timeout = 3,
+        timeout = probe_timeout,
         error_on_status = FALSE
       ),
       error = function(e) NULL
     )
 
-    if (is.null(out) || out$status != 0 || out$timeout) return(NULL)
+    if (!is.null(out) && isTRUE(out$timeout)) {
+      timed_out <<- c(timed_out, rscript)
+      return(NULL)
+    }
+    if (is.null(out) || out$status != 0) return(NULL)
 
     parts <- strsplit(trimws(out$stdout), "\\|\\|SEP\\|\\|")[[1]]
     if (length(parts) < 4) return(NULL)
@@ -275,6 +291,16 @@ find_routes <- function(search_paths = NULL) {
       is_current   = FALSE
     )
   })
+
+  if (length(timed_out) > 0) {
+    warning(
+      sprintf(
+        "R installation probe timed out after %gs and was skipped: %s. On slow machines, raise options(courier.probe_timeout = ).",
+        probe_timeout, paste(timed_out, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
 
   res_list <- res_list[!sapply(res_list, is.null)]
 

@@ -338,13 +338,13 @@ body {
   white-space: nowrap;
 }
 
-.sync-select-block-a {
+.sync-select-block-source {
   border-left: 3px solid #d8752a;
   padding-left: 0.6rem;
   margin-left: -0.6rem;
 }
 
-.sync-select-block-b {
+.sync-select-block-target {
   border-left: 3px solid #1f8d9b;
   padding-left: 0.6rem;
   margin-left: -0.6rem;
@@ -510,21 +510,31 @@ body {
   font-size: 0.94rem;
 }
 
-.sync-col-a {
+.sync-col-source {
   background: #fff0e4;
   color: #9a4b17;
   border: 1px solid #f0b07b;
 }
 
-.sync-col-b {
+.sync-col-target {
   background: #e3f5f7;
   color: #15606a;
   border: 1px solid #7fc8d1;
 }
 
-.sync-install-meta {
-  margin: 0.45rem 0 0;
-  filter: drop-shadow(0 8px 18px rgba(29, 111, 165, 0.08));
+/* Color the source/target select boxes to replace the removed version badge */
+.sync-select-block-source select.form-control,
+.sync-select-block-source select.shiny-bound-input {
+  background-color: #fff8f3;
+  border-color: #f0b07b;
+  color: #9a4b17;
+}
+
+.sync-select-block-target select.form-control,
+.sync-select-block-target select.shiny-bound-input {
+  background-color: #f0fafb;
+  border-color: #7fc8d1;
+  color: #15606a;
 }
 
 .sync-button-grid {
@@ -912,12 +922,12 @@ body {
   line-height: 1.3;
 }
 
-.sidebar-install-a {
+.sidebar-install-source {
   background: #fff4ec;
   border-color: #f0b07b;
 }
 
-.sidebar-install-b {
+.sidebar-install-target {
   background: #e8f9fa;
   border-color: #7fc8d1;
 }
@@ -969,13 +979,13 @@ body {
   border-color: #c8dcea;
 }
 
-.chip-diff-a {
+.chip-diff-source {
   background: #fff4ec;
   color: #9a4b17;
   border-color: #f0b07b;
 }
 
-.chip-diff-b {
+.chip-diff-target {
   background: #e8f9fa;
   color: #15606a;
   border-color: #7fc8d1;
@@ -1453,6 +1463,79 @@ body {
   text-decoration: underline;
 }
 
+.preview-custom-dispatch-note {
+  margin: 0.7rem 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: 10px;
+  background: #f6f2ff;
+  border-left: 4px solid #8a52c8;
+  color: #4a3d7a;
+  font-size: 0.88rem;
+}
+
+.preview-custom-dispatch-note a {
+  color: #5f4ab4;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.preview-custom-dispatch-note a:hover {
+  text-decoration: underline;
+}
+
+/* ── Custom Dispatch source/target route summary ── */
+.depot-route-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.depot-route-node {
+  padding: 0.65rem 0.8rem;
+  border-radius: 14px;
+  border: 1px solid #d7e3ed;
+  min-width: 0;
+}
+
+.depot-route-source {
+  background: #fff8f3;
+  border-color: #f0b07b;
+}
+
+.depot-route-target {
+  background: #f0fafb;
+  border-color: #7fc8d1;
+}
+
+.depot-route-kicker {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #6d879b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.depot-route-path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #274158;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.depot-route-arrow {
+  align-self: center;
+  color: #8a52c8;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
 /* ── Delivery receipt panel ── */
 .sync-receipt-card {
   margin-top: 1rem;
@@ -1564,6 +1647,17 @@ body {
 
 .depot-ship-footer {
   margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.depot-ship-timer {
+  font-size: 0.82rem;
+  color: #5a7e9a;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .depot-ship-execute-btn {
@@ -1578,4 +1672,61 @@ body {
   color: #1d6fa5;
   font-weight: 600;
   border-radius: 7px;
+}
+
+/* ── Global busy lock ──
+   body.app-busy is toggled by courierAppBusy() (ui.R): set client-side from
+   the Compare/Ship buttons' onclick (instant, before the blocking observer),
+   cleared server-side when the operation finishes. While busy, every action
+   button across all tabs is greyed and unclickable; modal buttons (e.g. a
+   confirmation dialog's Cancel) stay usable. */
+body.app-busy .btn,
+body.app-busy .action-button {
+  pointer-events: none;
+  opacity: 0.5;
+}
+body.app-busy .modal .btn,
+body.app-busy .modal .action-button {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* ── Live shipping hero panel (Custom Dispatch) ───────────────────────── */
+.depot-hero {
+  background: linear-gradient(135deg, #1e9e62 0%, #15815a 100%);
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  box-shadow: 0 3px 10px rgba(21, 129, 90, 0.25);
+}
+.depot-hero-kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.depot-hero-main {
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.depot-hero-pkg {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.depot-hero-meta {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+.depot-summary-est {
+  margin-left: 10px;
+  color: #5f4ab4;
+  font-weight: 700;
 }

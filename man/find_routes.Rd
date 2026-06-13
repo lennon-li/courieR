@@ -21,7 +21,7 @@ following columns:
 \item{home}{Character. The installation directory (\code{R.home()}), i.e. where
 this R is installed. Normalized lexically for comparison.}
 \item{library}{Character. The installation's primary library location
-(\code{.libPaths()[1]} under a vanilla session) — where \code{install.packages()}
+(\code{.libPaths()[1]} under a vanilla session) - where \code{install.packages()}
 writes by default. This is the effective package store; two installs
 that share a \code{library} hold the same packages. Normalized lexically for
 comparison. \code{NA} if it could not be determined.}
@@ -37,41 +37,46 @@ Detection sources by platform:
 
 \strong{Windows}
 \itemize{
-\item HKLM registry (\verb{SOFTWARE\\R-core\\R}) — standard admin installs via
+\item HKLM registry (\verb{SOFTWARE\\R-core\\R}) - standard admin installs via
 the CRAN Windows installer.
-\item HKCU registry (\verb{SOFTWARE\\R-core\\R}) — non-admin installs that
+\item HKCU registry (\verb{SOFTWARE\\R-core\\R}) - non-admin installs that
 register under the current user hive only.
-\item \verb{\%ProgramFiles\%\\R} — directory scan for admin installs not in the
+\item \verb{\%ProgramFiles\%\\R} - directory scan for admin installs not in the
 registry.
-\item \verb{\%LOCALAPPDATA\%\\Programs\\R} — rig-managed and other user-local
+\item \verb{\%LOCALAPPDATA\%\\Programs\\R} - rig-managed and other user-local
 installs.
-\item \verb{\%USERPROFILE\%\\Documents\\R} — installs placed in the user's
+\item \verb{\%USERPROFILE\%\\Documents\\R} - installs placed in the user's
 Documents folder.
-\item rig (\verb{rig list}) — any additional versions managed by rig that
+\item rig (\verb{rig list}) - any additional versions managed by rig that
 were not found by path scanning.
 }
 
 \strong{macOS}
 \itemize{
-\item \verb{/Library/Frameworks/R.framework/Versions} — system-wide CRAN
+\item \verb{/Library/Frameworks/R.framework/Versions} - system-wide CRAN
 installer.
-\item \verb{~/Library/Frameworks/R.framework/Versions} — user-local framework
+\item \verb{~/Library/Frameworks/R.framework/Versions} - user-local framework
 installs (no admin required).
 \item Homebrew: \verb{/opt/homebrew/opt/r} (Apple Silicon) and
 \verb{/usr/local/opt/r} (Intel).
-\item rig (\verb{rig list}) — rig-managed versions.
+\item rig (\verb{rig list}) - rig-managed versions.
 }
 
 \strong{Linux}
 \itemize{
-\item \verb{/opt/R} — rig system-wide installs.
-\item \verb{~/.local/share/rig/R} — rig user-local installs.
+\item \verb{/opt/R} - rig system-wide installs.
+\item \verb{~/.local/share/rig/R} - rig user-local installs.
 \item conda environments (active \verb{$CONDA_PREFIX}).
 \item System \code{Rscript} on \verb{$PATH}.
 }
 
 Symlinks are resolved via \code{fs::path_real()} so that duplicate entries from
 different detection sources pointing to the same executable are collapsed.
+
+Each candidate is probed in a short subprocess. The probe timeout defaults
+to 30 seconds and can be adjusted via \code{options(courier.probe_timeout = )};
+installations whose probe times out are skipped with a warning rather than
+silently dropped.
 }
 \examples{
 \donttest{

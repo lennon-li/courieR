@@ -27,7 +27,8 @@ copy_packages <- function(plan, target_lib, log_callback = NULL) {
     ))
   }
 
-  results <- lapply(seq_len(nrow(plan)), function(i) {
+  n <- nrow(plan)
+  results <- lapply(seq_len(n), function(i) {
     pkg <- plan$package[[i]]
     src <- plan$libpath[[i]]
 
@@ -43,8 +44,13 @@ copy_packages <- function(plan, target_lib, log_callback = NULL) {
 
     dst <- file.path(target_lib, pkg)
     tryCatch({
+      # Announce BEFORE the copy: a single dir_copy can take minutes on
+      # synced/network drives, and live progress UIs key off this line.
+      emit(sprintf("[%d/%d] %s - copying ...", i, n, pkg))
+      t0 <- Sys.time()
       fs::dir_copy(src, dst, overwrite = TRUE)
-      emit(sprintf("[ok] %s - copied", pkg))
+      emit(sprintf("[ok] %s - copied (%.1fs)", pkg,
+                   as.numeric(difftime(Sys.time(), t0, units = "secs"))))
       list(package = pkg, status = "success", message = "copied")
     }, error = function(e) {
       emit(sprintf("[error] %s - %s", pkg, conditionMessage(e)))

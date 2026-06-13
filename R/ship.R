@@ -4,9 +4,15 @@
 #' @return Character scalar path to `.libPaths()[1L]` in the target R.
 #' @keywords internal
 find_target_lib <- function(target_path) {
+  # Strip the parent session's library env vars and use normal startup (the
+  # target reads its own .Renviron/.Rprofile) so this resolves the SAME library
+  # that manifest() scans. With --vanilla + inherited env, .libPaths()[1] was
+  # the parent's R_LIBS_USER - ship() then installed into a library that
+  # Compare never looks at, so shipped packages stayed "not installed".
   res <- processx::run(
     target_path,
-    c("--vanilla", "--no-save", "-e", "cat(.libPaths()[1L])"),
+    c("--no-save", "-e", "cat(.libPaths()[1L])"),
+    env = child_r_env(),
     error_on_status = FALSE
   )
   out <- trimws(res$stdout)
@@ -24,6 +30,7 @@ find_target_lib <- function(target_path) {
     processx::run(
       rscript_path,
       c("--vanilla", "--no-save", "-e", "cat(R.version$major)"),
+      env = child_r_env(),
       error_on_status = FALSE,
       timeout = 5
     ),
@@ -36,11 +43,17 @@ find_target_lib <- function(target_path) {
 .copy_plan <- function(plan) {
   plan <- data.table::as.data.table(plan)
   lib_col <- intersect(c("libpath", "libpath.x"), names(plan))[1]
-  libpath <- if (!is.na(lib_col)) as.character(plan[[lib_col]]) else rep(NA_character_, nrow(plan))
-  compiled <- !is.na(libpath) & nzchar(libpath) & file.exists(file.path(libpath, "libs"))
+  libdir <- if (!is.na(lib_col)) as.character(plan[[lib_col]]) else rep(NA_character_, nrow(plan))
+  # A manifest's `libpath` is the LIBRARY directory, shared by every package in
+  # it; the per-package source is <library>/<package>. Join the package name so
+  # copy_packages copies the package into target/<pkg> — without this it copies
+  # the entire library into target/<pkg>/, leaving no valid package where R looks.
+  pkg_src <- ifelse(!is.na(libdir) & nzchar(libdir),
+                    file.path(libdir, plan$package), NA_character_)
+  compiled <- !is.na(pkg_src) & file.exists(file.path(pkg_src, "libs"))
   data.table::data.table(
     package = plan$package,
-    libpath = libpath,
+    libpath = pkg_src,
     compiled = compiled
   )
 }
@@ -121,9 +134,13 @@ find_target_lib <- function(target_path) {
     # destabilise and abort the host R session. The full output is still
     # captured in `res$stdout`/`res$stderr` for the failure message below, and
     # the milestone/summary messages around this call still reach the UI.
+    # child_r_env(): without it the target R inherits the parent's R_LIBS_USER,
+    # sees the parent's library on .libPaths(), and pak can wrongly treat
+    # dependencies as already installed.
     res <- processx::run(
       target_path,
       c("--vanilla", install_script_file, install_args_file),
+      env = child_r_env(),
       error_on_status = FALSE,
       stdout_line_callback = function(line, proc) cat(line, "\n", sep = ""),
       stderr_line_callback = function(line, proc) cat(line, "\n", sep = "", file = stderr())
@@ -167,9 +184,12 @@ find_target_lib <- function(target_path) {
 #' @param dry_run If `TRUE`, build and return the installation plan without
 #'   installing anything. Use this to review what will happen before
 #'   committing to a sync.
-#' @param upgrade If `TRUE`, packages already present in the target but at an
-#'   older version than the source are upgraded. If `FALSE` (the default),
-#'   only packages missing from the target are installed.
+#' @param upgrade Passed to [pak::pkg_install()] in online mode. The packages
+#'   in the plan (missing or outdated in the target) are always installed at
+#'   the latest compatible version regardless. If `TRUE`, pak additionally
+#'   upgrades every outdated *dependency* of those packages in the target
+#'   library; if `FALSE` (the default), dependencies are only changed when a
+#'   version requirement forces it, which is much faster.
 #' @param log_callback Optional function of one argument. When provided, it is
 #'   called with a single character string for each progress message emitted
 #'   during package transfer.
@@ -296,34 +316,28 @@ ship <- function(source_path, target_path, packages = NULL, dry_run = FALSE, upg
   if (mode == "online") {
     target_lib <- find_target_lib(target_path)
 
-    # Avoid recompiling/redownloading wherever it is safe:
-    #   * Pure-R packages (no compiled code) are ABI-independent - copy them
-    #     directly from the source library, even across R versions. No download,
-    #     no compile.
-    #   * Local/private packages (source "unknown") can't be fetched online  - 
-    #     copy them too (also keeps one un-findable package from poisoning pak's
-    #     atomic solve).
-    #   * Only packages that are BOTH resolvable online AND have compiled code
-    #     go through pak, which must rebuild them for the target R (binary
-    #     preferred - see .run_pak_plan).
-    plan_meta  <- .copy_plan(plan)
-    compiled   <- plan_meta$compiled[match(plan$package, plan_meta$package)]
-    compiled[is.na(compiled)] <- FALSE
+    # Online mode means online: every package resolvable from a repository
+    # (CRAN / Bioconductor / GitHub) is reinstalled via pak in one atomic
+    # solve - binaries preferred, built for the target R. Only local/private
+    # packages (source "unknown") are copied from the source library: they
+    # cannot be fetched online, and keeping them out of the solve stops one
+    # un-findable package from failing the whole installation. File copies
+    # can also be far slower than pak on synced/network libraries, so they
+    # are reserved for packages with no online route.
     resolvable <- !is.na(plan$source) & plan$source %in% c("CRAN", "Bioconductor", "GitHub")
 
-    needs_pak     <- resolvable & compiled
-    online_plan   <- plan[needs_pak, ]
-    copy_plan_all <- plan[!needs_pak, ]
+    online_plan   <- plan[resolvable, ]
+    copy_plan_all <- plan[!resolvable, ]
 
     if (nrow(copy_plan_all) > 0 && is.function(log_callback)) {
       try(log_callback(sprintf(
-        "Copying %d package(s) directly from the source library (pure-R or local - no rebuild needed): %s",
+        "Copying %d local/private package(s) directly from the source library (no online source): %s",
         nrow(copy_plan_all), paste(copy_plan_all$package, collapse = ", ")
       )), silent = TRUE)
     }
     if (nrow(online_plan) > 0 && is.function(log_callback)) {
       try(log_callback(sprintf(
-        "Reinstalling %d compiled package(s) via pak (binary preferred): %s",
+        "Reinstalling %d package(s) via pak (binary preferred): %s",
         nrow(online_plan), paste(online_plan$package, collapse = ", ")
       )), silent = TRUE)
     }

@@ -15,3 +15,7 @@
 ^tmp-.*\.R$
 ^CRAN-SUBMISSION$
 ^cran-comments\.md$
+^_pkgdown\.yml$
+^docs$
+^\.superpowers$
+^vignettes/figures/\.gitkeep$

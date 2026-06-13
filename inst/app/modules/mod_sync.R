@@ -27,6 +27,30 @@ mod_sync_ui <- function(id) {
        if(el&&window.__courierTimerStart) el.textContent=window.courierFmt(Date.now()-window.__courierTimerStart);
      };"
   )),
+  tags$script(HTML(sprintf(
+    "(function(){
+       var heroId='%s', _iv=null, _t0=null;
+       function el(sfx){ return document.getElementById(heroId+sfx); }
+       function fmt(s){ var m=Math.floor(s/60); return m>0?(m+'m '+(s%%60)+'s'):(s+'s'); }
+       window.courierBulkHero={
+         start:function(total,est){
+           var h=el(''); if(!h) return;
+           h.style.display='block';
+           h.innerHTML=
+             '<div class=\"depot-hero-kicker\">Shipping in progress</div>'+
+             '<div class=\"depot-hero-main\"><span id=\"'+heroId+'_count\">0</span> / '+total+' delivered</div>'+
+             '<div class=\"depot-hero-pkg\" id=\"'+heroId+'_pkg\">Preparing shipment\\u2026</div>'+
+             '<div class=\"depot-hero-meta\"><span id=\"'+heroId+'_timer\">0s</span> elapsed \\u00b7 estimated '+est+'</div>';
+           _t0=Date.now(); clearInterval(_iv);
+           _iv=setInterval(function(){ var t=el('_timer'); if(t) t.textContent=fmt(Math.floor((Date.now()-_t0)/1000)); },1000);
+         },
+         status:function(txt){ var p=el('_pkg'); if(p) p.textContent=txt; },
+         count: function(k){   var c=el('_count'); if(c) c.textContent=k; },
+         stop:  function(){ clearInterval(_iv); _iv=null; var h=el(''); if(h) h.style.display='none'; }
+       };
+     })()",
+    ns("bulk_hero")
+  ))),
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       class = "sync-sidebar",
@@ -34,20 +58,18 @@ mod_sync_ui <- function(id) {
       uiOutput(ns("detecting_msg")),
       uiOutput(ns("detected_installs")),
       div(
-        class = "sync-select-block sync-select-block-a",
+        class = "sync-select-block sync-select-block-source",
         tags$div(class = "sync-select-label", "Select source installation"),
-        selectInput(ns("install_a"), NULL, choices = character(0), selectize = FALSE),
-        uiOutput(ns("install_a_badge"))
+        selectInput(ns("install_source"), NULL, choices = character(0), selectize = FALSE)
       ),
       div(
-        class = "sync-select-block sync-select-block-b",
+        class = "sync-select-block sync-select-block-target",
         tags$div(class = "sync-select-label", "Select target installation"),
-        selectInput(ns("install_b"), NULL, choices = character(0), selectize = FALSE),
-        uiOutput(ns("install_b_target_hint")),
-        uiOutput(ns("install_b_badge"))
+        selectInput(ns("install_target"), NULL, choices = character(0), selectize = FALSE),
+        uiOutput(ns("install_target_hint"))
       ),
       actionButton(ns("compare"), "Compare", class = "btn sync-compare-btn",
-        onclick = "this.disabled=true; if(window.courierStartTimer) window.courierStartTimer();"),
+        onclick = "this.disabled=true; if(window.courierAppBusy) courierAppBusy(true); if(window.courierStartTimer) window.courierStartTimer();"),
       div(
         class = "sync-select-block",
         tags$div(class = "sync-select-label sync-label-row",
@@ -87,6 +109,7 @@ mod_sync_ui <- function(id) {
           ),
           div(
             class = "sync-log-pane",
+            tags$div(id = ns("bulk_hero"), class = "depot-hero", style = "display:none;"),
             uiOutput(ns("sync_log"))
           )
         )
@@ -100,22 +123,24 @@ mod_sync_maintenance_ui <- function(id) {
   ns <- NS(id)
   div(
     class = "sync-restock-wrap",
-    actionButton(ns("restock_a"), "Restock source from CRAN",
+    actionButton(ns("restock_source"), "Restock source from CRAN",
                  class = "btn sync-restock-btn"),
-    actionButton(ns("restock_b"), "Restock target from CRAN",
+    actionButton(ns("restock_target"), "Restock target from CRAN",
                  class = "btn sync-restock-btn")
   )
 }
 
 mod_sync_server <- function(id,
-                            install_a_path     = NULL,
-                            install_b_path     = NULL,
+                            install_source_path     = NULL,
+                            install_target_path     = NULL,
                             routes_cache       = NULL,
                             push_error         = NULL,
                             comparison_out     = NULL,
                             actionable_out     = NULL,
                             sync_direction_out = NULL,
-                            transfer_mode_out  = NULL) {
+                            transfer_mode_out  = NULL,
+                            refresh_request    = NULL,
+                            shared_scans       = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     pending_sync     <- reactiveVal(NULL)
@@ -128,24 +153,39 @@ mod_sync_server <- function(id,
     sync_pct         <- reactiveVal(0)
     sync_step        <- reactiveVal("Idle")
     selected_statuses <- reactiveVal(NULL)
-    last_ship_result  <- reactiveVal(NULL)
 
     # Session cache of manifest() scans keyed by Rscript path, so Compare/Ship/
     # Preview reuse a library scan instead of re-spawning a subprocess each time.
-    # Invalidated for a target after a ship (its library changed).
-    manifest_cache <- reactiveVal(list())
+    # Invalidated for a target after a ship (its library changed). When the app
+    # provides `shared_scans`, the cache is shared with Custom Dispatch so a
+    # ship there never rescans what Compare already scanned (and vice versa).
+    manifest_cache <- reactiveVal(list())  # local fallback (tests)
     get_manifest <- function(path, force = FALSE) {
+      if (!is.null(shared_scans)) {
+        return(shared_scans$get(path, force = force, log = add_sync_log))
+      }
       cache <- isolate(manifest_cache())
       if (!force && !is.null(cache[[path]])) return(cache[[path]])
-      m <- courieR::manifest(rscript_path = path)
-      cache[[path]] <- m
-      manifest_cache(cache)
+      # Generous timeout: cold Windows R spawns + antivirus scanning can push a
+      # library scan well past manifest()'s 30s default on slow machines.
+      m <- courieR::manifest(rscript_path = path, timeout_sec = 300L)
+      # Never cache a timed-out scan: it is an empty table, and serving it from
+      # cache makes every later Compare instantly report "no packages found".
+      if (!isTRUE(attr(m, "timed_out"))) {
+        cache[[path]] <- m
+        manifest_cache(cache)
+      }
       m
     }
     invalidate_manifest <- function(path) {
+      if (!is.null(shared_scans)) return(shared_scans$invalidate(path))
       cache <- isolate(manifest_cache())
       cache[[path]] <- NULL
       manifest_cache(cache)
+    }
+    clear_manifests <- function() {
+      if (!is.null(shared_scans)) return(shared_scans$clear())
+      manifest_cache(list())
     }
 
     # Short, human-distinguishable form of a library path: its last two path
@@ -256,6 +296,7 @@ mod_sync_server <- function(id,
         shinyjs::runjs(sprintf(
           "(function(){
             var active=%s;
+            if(window.courierAppBusy) courierAppBusy(active);
             var b=document.getElementById('nav-progress-bar');
             var st=document.getElementById('nav-progress-step');
             if(st){ st.textContent=%s; }
@@ -284,15 +325,15 @@ mod_sync_server <- function(id,
         return("no packages in comparison")
       }
 
-      statuses <- c("same", "missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+      statuses <- c("same", "missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
       counts <- table(factor(comp[["status"]], levels = statuses))
       sprintf(
-        "%d same, %d missing from B, %d missing from A, %d newer in A, %d newer in B",
+        "%d same, %d missing from target, %d missing from source, %d newer in source, %d newer in target",
         counts[["same"]],
-        counts[["missing-from-B"]],
-        counts[["missing-from-A"]],
-        counts[["newer-in-A"]],
-        counts[["newer-in-B"]]
+        counts[["missing-from-target"]],
+        counts[["missing-from-source"]],
+        counts[["newer-in-source"]],
+        counts[["newer-in-target"]]
       )
     }
 
@@ -426,34 +467,34 @@ mod_sync_server <- function(id,
         suffixes = c(".a", ".b")
       )
 
-      data.table::setnames(comp, c("version.a", "version.b"), c("version_in_a", "version_in_b"))
+      data.table::setnames(comp, c("version.a", "version.b"), c("version_in_source", "version_in_target"))
       if ("source.a" %in% names(comp)) {
-        data.table::setnames(comp, "source.a", "source_in_a")
+        data.table::setnames(comp, "source.a", "repo_in_source")
       }
       if ("source.b" %in% names(comp)) {
-        data.table::setnames(comp, "source.b", "source_in_b")
+        data.table::setnames(comp, "source.b", "repo_in_target")
       }
 
       status <- rep("same", nrow(comp))
-      missing_b <- is.na(comp[["version_in_b"]]) & !is.na(comp[["version_in_a"]])
-      missing_a <- is.na(comp[["version_in_a"]]) & !is.na(comp[["version_in_b"]])
-      status[missing_b] <- "missing-from-B"
-      status[missing_a] <- "missing-from-A"
+      missing_tgt <- is.na(comp[["version_in_target"]]) & !is.na(comp[["version_in_source"]])
+      missing_src <- is.na(comp[["version_in_source"]]) & !is.na(comp[["version_in_target"]])
+      status[missing_tgt] <- "missing-from-target"
+      status[missing_src] <- "missing-from-source"
 
-      both_present <- !is.na(comp[["version_in_a"]]) & !is.na(comp[["version_in_b"]])
+      both_present <- !is.na(comp[["version_in_source"]]) & !is.na(comp[["version_in_target"]])
       if (any(both_present)) {
-        ver_a <- package_version(comp[["version_in_a"]][both_present])
-        ver_b <- package_version(comp[["version_in_b"]][both_present])
+        ver_src <- package_version(comp[["version_in_source"]][both_present])
+        ver_tgt <- package_version(comp[["version_in_target"]][both_present])
         both_status <- rep("same", sum(both_present))
-        both_status[ver_a > ver_b] <- "newer-in-A"
-        both_status[ver_b > ver_a] <- "newer-in-B"
+        both_status[ver_src > ver_tgt] <- "newer-in-source"
+        both_status[ver_tgt > ver_src] <- "newer-in-target"
         status[both_present] <- both_status
       }
 
       data.table::set(comp, j = "status", value = status)
       status_rank <- match(
         comp[["status"]],
-        c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")
+        c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target", "same")
       )
       comp <- comp[order(status_rank, comp[["package"]]), ]
       comp[]
@@ -463,7 +504,7 @@ mod_sync_server <- function(id,
     # target. (Packages only in / newer in the target are never touched — the
     # transfer is one-directional.)
     packages_for_direction <- function(comp) {
-      comp[["package"]][comp[["status"]] %in% c("missing-from-B", "newer-in-A")]
+      comp[["package"]][comp[["status"]] %in% c("missing-from-target", "newer-in-source")]
     }
 
     # Build the single source → target ship() batch from a comparison.
@@ -474,16 +515,12 @@ mod_sync_server <- function(id,
                 target_path = target_path, packages = pkgs))
     }
 
-    estimate_sync_time <- function(package_count) {
-      if (package_count <= 0) {
-        return("less than 1 minute")
-      }
-
-      # ~8-25 seconds per package via pak (network + compile)
-      min_minutes <- ceiling(max(1, package_count * 8 / 60))
-      max_minutes <- ceiling(max(min_minutes + 1, package_count * 25 / 60))
-
-      sprintf("%d-%d minutes", min_minutes, max_minutes)
+    # Estimate for the sync log line: same calibrated engine as the invoice.
+    estimate_sync_time <- function(packages, source_path, mode) {
+      tryCatch(
+        invoice_batch(packages, source_path, mode)$secs_text,
+        error = function(e) "unknown"
+      )
     }
 
     # Classify the packages of one batch into cost tiers, mirroring ship()'s
@@ -492,41 +529,50 @@ mod_sync_server <- function(id,
     #   copy   — pure-R or local: copied directly (no download, no compile)
     #   binary — compiled CRAN package: reinstalled from a pre-built binary
     #   source — compiled Bioconductor/GitHub: must compile from source (slow)
+    # Mirrors ship()'s routing: online mode reinstalls every repository-
+    # resolvable package via pak; only local/unknown-source packages are
+    # copied. Time comes from per-machine calibrated rates (estimate.R) -
+    # static constants were off by 100x on slow synced/network libraries.
     invoice_batch <- function(packages, source_path, mode) {
       n <- length(packages)
-      if (n == 0) return(list(copy = 0L, binary = 0L, source = 0L, secs = 0))
+      if (n == 0) return(list(copy = 0L, binary = 0L, source = 0L, secs = 0, secs_text = "~0s"))
       if (mode %in% c("offline", "preserve")) {
-        return(list(copy = n, binary = 0L, source = 0L, secs = n * 0.5))
+        est <- courieR:::estimate_ship_secs(n_copy = n)
+        return(list(copy = n, binary = 0L, source = 0L,
+                    secs = est$high, secs_text = est$text))
       }
       src <- data.table::as.data.table(get_manifest(source_path))
       rows <- src[match(packages, src$package), ]
-      libpath <- if ("libpath" %in% names(rows)) rows$libpath else rep(NA_character_, n)
       src_col <- if ("source" %in% names(rows)) rows$source else rep(NA_character_, n)
-      compiled <- !is.na(libpath) & nzchar(libpath) & file.exists(file.path(libpath, "libs"))
       resolvable <- !is.na(src_col) & src_col %in% c("CRAN", "Bioconductor", "GitHub")
-      needs_pak  <- resolvable & compiled
-      is_source  <- needs_pak & src_col %in% c("Bioconductor", "GitHub")
-      is_binary  <- needs_pak & !is_source
-      is_copy    <- !needs_pak
+      is_source  <- resolvable & src_col %in% c("Bioconductor", "GitHub")
+      is_binary  <- resolvable & !is_source
+      is_copy    <- !resolvable
+      est <- courieR:::estimate_ship_secs(
+        n_copy = sum(is_copy), n_binary = sum(is_binary), n_source = sum(is_source)
+      )
       list(
         copy   = sum(is_copy),
         binary = sum(is_binary),
         source = sum(is_source),
-        secs   = sum(is_copy) * 0.5 + sum(is_binary) * 5 + sum(is_source) * 45
+        secs   = est$high,
+        secs_text = est$text
       )
     }
 
     # Aggregate the invoice across the source → target batch of a pending plan.
     build_invoice <- function(plan, mode) {
       batches <- list(list(packages = plan$packages, source_path = plan$source_path))
-      tot <- list(copy = 0L, binary = 0L, source = 0L, secs = 0)
+      tot <- list(copy = 0L, binary = 0L, source = 0L)
       for (b in batches) {
         inv <- invoice_batch(b$packages, b$source_path, mode)
         tot$copy   <- tot$copy   + inv$copy
         tot$binary <- tot$binary + inv$binary
         tot$source <- tot$source + inv$source
-        tot$secs   <- tot$secs   + inv$secs
       }
+      est <- courieR:::estimate_ship_secs(tot$copy, tot$binary, tot$source)
+      tot$secs      <- est$high
+      tot$secs_text <- est$text
       tot
     }
 
@@ -554,8 +600,13 @@ mod_sync_server <- function(id,
     }
 
     log_libpaths <- function(label, pkgs) {
+      if (isTRUE(attr(pkgs, "timed_out"))) {
+        add_sync_log(label, ": SCAN TIMED OUT - the R subprocess did not respond in time. ",
+                     "The result below is incomplete; click Compare to retry.")
+        return(invisible(NULL))
+      }
       if (is.null(pkgs) || !"libpath" %in% names(pkgs) || nrow(pkgs) == 0) {
-        add_sync_log(label, ": no packages found.")
+        add_sync_log(label, ": no user packages found (library is empty or has only base/recommended packages).")
         return(invisible(NULL))
       }
       libs <- unique(pkgs$libpath)
@@ -577,7 +628,10 @@ mod_sync_server <- function(id,
       set_sync_progress(pct_base + pct_span * 0.55, "Scanning target installation", active = TRUE)
       b_pkgs <- get_manifest(b_path)
       log_libpaths("Target library", b_pkgs)
-      if (identical(sort(unique(a_pkgs$libpath)), sort(unique(b_pkgs$libpath)))) {
+      # Only meaningful when both scans actually found packages: two empty
+      # scans have identical (empty) libpath sets and would warn vacuously.
+      if (nrow(a_pkgs) > 0 && nrow(b_pkgs) > 0 &&
+          identical(sort(unique(a_pkgs$libpath)), sort(unique(b_pkgs$libpath)))) {
         add_sync_log("WARNING: both installations resolve to the SAME library path. ",
                      "They share a package library (likely via R_LIBS_USER in .Renviron), ",
                      "so every package will compare as identical.")
@@ -621,32 +675,32 @@ mod_sync_server <- function(id,
       log_detection_summary(r)
       if (nrow(r) == 0) {
         showNotification("No R installations detected.", type = "warning")
-        updateSelectInput(session, "install_a", choices = character(0), selected = character(0))
-        updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_source", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_target", choices = character(0), selected = character(0))
       } else {
         choices <- route_choices(r)
 
-        current_a <- isolate(input$install_a)
-        current_b <- isolate(input$install_b)
+        current_src <- isolate(input$install_source)
+        current_tgt <- isolate(input$install_target)
 
         # Routes are sorted newest-first. Default source to the OLDEST install
         # and target to the newest — the common "carry packages up to my newest
         # R" case — so a valid same-or-newer target is always preselected (the
-        # target-filter observer then keeps install_b constrained to the source).
-        selected_a <- if (!is.null(current_a) && nzchar(current_a) && current_a %in% r$rscript_path) {
-          current_a
+        # target-filter observer then keeps install_target constrained to the source).
+        selected_src <- if (!is.null(current_src) && nzchar(current_src) && current_src %in% r$rscript_path) {
+          current_src
         } else {
           r$rscript_path[[nrow(r)]]
         }
 
-        selected_b <- if (!is.null(current_b) && nzchar(current_b) && current_b %in% r$rscript_path && !identical(current_b, selected_a)) {
-          current_b
+        selected_tgt <- if (!is.null(current_tgt) && nzchar(current_tgt) && current_tgt %in% r$rscript_path && !identical(current_tgt, selected_src)) {
+          current_tgt
         } else {
           r$rscript_path[[1]]
         }
 
-        updateSelectInput(session, "install_a", choices = choices, selected = selected_a)
-        updateSelectInput(session, "install_b", choices = choices, selected = selected_b)
+        updateSelectInput(session, "install_source", choices = choices, selected = selected_src)
+        updateSelectInput(session, "install_target", choices = choices, selected = selected_tgt)
       }
       detecting(FALSE)
     }
@@ -654,7 +708,7 @@ mod_sync_server <- function(id,
     load_routes <- function() {
       detecting(TRUE)
       detection_status(NULL)
-      manifest_cache(list())  # fresh detection → drop any cached library scans
+      clear_manifests()  # fresh detection → drop any cached library scans
       add_sync_log("Scanning for R installations...")
       tryCatch({
         r <- sort_routes(courieR::find_routes())
@@ -668,22 +722,6 @@ mod_sync_server <- function(id,
       })
     }
 
-
-    output$install_a_badge <- renderUI({
-      a_version <- route_version(input$install_a)
-      div(
-        class = "sync-install-meta sync-install-meta-a",
-        shiny::HTML(r_badge(a_version, "a"))
-      )
-    })
-
-    output$install_b_badge <- renderUI({
-      b_version <- route_version(input$install_b)
-      div(
-        class = "sync-install-meta sync-install-meta-b",
-        shiny::HTML(r_badge(b_version, "b"))
-      )
-    })
 
     output$detecting_msg <- renderUI({
       if (detecting()) {
@@ -714,8 +752,8 @@ mod_sync_server <- function(id,
       routes <- routes_data()
       if (nrow(routes) == 0) return(NULL)
 
-      sel_a   <- input$install_a
-      sel_b   <- input$install_b
+      sel_src <- input$install_source
+      sel_tgt <- input$install_target
       has_lib <- "library" %in% names(routes)
 
       # Libraries shared by more than one install (same package store).
@@ -732,8 +770,8 @@ mod_sync_server <- function(id,
         lapply(seq_len(nrow(routes)), function(i) {
           path <- routes$rscript_path[[i]]
           lib  <- if (has_lib) routes$library[[i]] else NA_character_
-          bucket <- if (!is.null(sel_a) && identical(path, sel_a)) "a"
-                    else if (!is.null(sel_b) && identical(path, sel_b)) "b"
+          bucket <- if (!is.null(sel_src) && identical(path, sel_src)) "source"
+                    else if (!is.null(sel_tgt) && identical(path, sel_tgt)) "target"
                     else ""
           extra_cls <- if (nzchar(bucket)) paste0("sidebar-install-", bucket) else ""
           is_shared <- !is.na(lib) && nzchar(lib) && lib %in% shared_libs
@@ -775,8 +813,8 @@ mod_sync_server <- function(id,
     output$comparison_summary <- renderUI({
       comp <- comparison_data()
       if (is.null(comp) || nrow(comp) == 0) return(NULL)
-      a_version <- route_version(input$install_a)
-      b_version <- route_version(input$install_b)
+      src_version <- route_version(input$install_source)
+      tgt_version <- route_version(input$install_target)
 
       counts <- table(comp[["status"]])
       filter_state <- selected_statuses()
@@ -792,10 +830,10 @@ mod_sync_server <- function(id,
         )
       }
 
-      a_lbl <- if (!is.na(a_version)) paste("newer in R", a_version) else "newer in A"
-      b_lbl <- if (!is.na(b_version)) paste("newer in R", b_version) else "newer in B"
-      na_lbl <- if (!is.na(a_version)) paste("not in R", a_version) else "missing from A"
-      nb_lbl <- if (!is.na(b_version)) paste("not in R", b_version) else "missing from B"
+      src_lbl <- if (!is.na(src_version)) paste("newer in R", src_version) else "newer in source"
+      tgt_lbl <- if (!is.na(tgt_version)) paste("newer in R", tgt_version) else "newer in target"
+      not_src_lbl <- if (!is.na(src_version)) paste("not in R", src_version) else "missing from source"
+      not_tgt_lbl <- if (!is.na(tgt_version)) paste("not in R", tgt_version) else "missing from target"
 
       hint_ui <- if (any(comp[["status"]] != "same")) {
         tags$p(
@@ -814,10 +852,10 @@ mod_sync_server <- function(id,
         div(
           class = "sync-summary-bar",
           make_chip("same",           "identical",  "chip-same"),
-          make_chip("newer-in-A",     a_lbl,        "chip-diff-a"),
-          make_chip("newer-in-B",     b_lbl,        "chip-diff-b"),
-          make_chip("missing-from-B", nb_lbl,       "chip-diff-a"),
-          make_chip("missing-from-A", na_lbl,       "chip-diff-b")
+          make_chip("newer-in-source",     src_lbl,      "chip-diff-source"),
+          make_chip("newer-in-target",     tgt_lbl,      "chip-diff-target"),
+          make_chip("missing-from-target", not_tgt_lbl,  "chip-diff-source"),
+          make_chip("missing-from-source", not_src_lbl,  "chip-diff-target")
         ),
         hint_ui
       )
@@ -889,16 +927,16 @@ mod_sync_server <- function(id,
     # No automatic detection on startup — the user clicks Detect (see observer
     # below), which calls load_routes() and shares the result via routes_cache.
 
-    observeEvent(input$install_a, {
-      if (is.function(install_a_path)) {
-        install_a_path(input$install_a)
+    observeEvent(input$install_source, {
+      if (is.function(install_source_path)) {
+        install_source_path(input$install_source)
       }
       comparison_data(NULL)
     }, ignoreNULL = FALSE)
 
-    observeEvent(input$install_b, {
-      if (is.function(install_b_path)) {
-        install_b_path(input$install_b)
+    observeEvent(input$install_target, {
+      if (is.function(install_target_path)) {
+        install_target_path(input$install_target)
       }
       comparison_data(NULL)
     }, ignoreNULL = FALSE)
@@ -907,23 +945,23 @@ mod_sync_server <- function(id,
     # the source changes (or installations are re-detected). Preserve the
     # current target if it is still eligible, otherwise pick the first valid one.
     observe({
-      src <- input$install_a
+      src <- input$install_source
       valid <- valid_targets(src)
       if (nrow(valid) == 0) {
-        updateSelectInput(session, "install_b", choices = character(0), selected = character(0))
+        updateSelectInput(session, "install_target", choices = character(0), selected = character(0))
         return()
       }
       choices <- route_choices(valid)
-      current_b <- isolate(input$install_b)
-      sel <- if (!is.null(current_b) && current_b %in% valid$rscript_path) current_b else valid$rscript_path[[1]]
-      updateSelectInput(session, "install_b", choices = choices, selected = sel)
+      current_tgt <- isolate(input$install_target)
+      sel <- if (!is.null(current_tgt) && current_tgt %in% valid$rscript_path) current_tgt else valid$rscript_path[[1]]
+      updateSelectInput(session, "install_target", choices = choices, selected = sel)
     })
 
     # Hint shown under the target dropdown when no eligible target exists. The
     # message distinguishes "there's only one R" from "others exist but were all
     # filtered out", so the user isn't told phantom installations were excluded.
-    output$install_b_target_hint <- renderUI({
-      src    <- input$install_a
+    output$install_target_hint <- renderUI({
+      src    <- input$install_source
       routes <- routes_data()
       if (is.null(src) || !nzchar(src) || nrow(routes) == 0) return(NULL)
       if (nrow(valid_targets(src)) > 0) return(NULL)
@@ -946,7 +984,7 @@ mod_sync_server <- function(id,
 
     # Direction is fixed source → target; expose the constant for shared modules.
     observe({
-      if (is.function(sync_direction_out)) sync_direction_out("A_to_B")
+      if (is.function(sync_direction_out)) sync_direction_out("source_to_target")
     })
     observe({
       if (is.function(transfer_mode_out))
@@ -980,7 +1018,8 @@ mod_sync_server <- function(id,
     # returns and Restock, whose buttons start the timer on click.
     stop_busy <- function() {
       shinyjs::runjs(
-        "if(window.courierStopTimer) window.courierStopTimer();
+        "if(window.courierAppBusy) courierAppBusy(false);
+         if(window.courierStopTimer) window.courierStopTimer();
          var b=document.getElementById('nav-progress-bar'); if(b) b.style.width='100%';
          var w=document.getElementById('nav-progress-wrap');
          setTimeout(function(){ if(w) w.style.display='none'; if(b) b.style.width='0%'; }, 1200);
@@ -1037,7 +1076,7 @@ mod_sync_server <- function(id,
     }
 
     copy_compatible <- reactive({
-      same_abi_series(route_version(input$install_a), route_version(input$install_b))
+      same_abi_series(route_version(input$install_source), route_version(input$install_target))
     })
 
     available_modes <- reactive({
@@ -1087,17 +1126,17 @@ mod_sync_server <- function(id,
     }, once = TRUE, ignoreNULL = FALSE)
 
     observeEvent(input$compare, {
-      a_path <- input$install_a
-      b_path <- input$install_b
+      src_path <- input$install_source
+      tgt_path <- input$install_target
 
-      if (is.null(a_path) || !nzchar(a_path) || is.null(b_path) || !nzchar(b_path)) {
+      if (is.null(src_path) || !nzchar(src_path) || is.null(tgt_path) || !nzchar(tgt_path)) {
         re_enable_compare()
         stop_busy()
         showNotification("Select a source and a target installation first.", type = "warning")
         return()
       }
 
-      if (identical(a_path, b_path)) {
+      if (identical(src_path, tgt_path)) {
         re_enable_compare()
         stop_busy()
         showNotification("Source and target must be different installations.", type = "warning")
@@ -1106,20 +1145,16 @@ mod_sync_server <- function(id,
 
       if (is.function(comparison_out))  comparison_out(NULL)
       if (is.function(actionable_out))  actionable_out(0L)
-      last_ship_result(NULL)
-
       selected_statuses(NULL)
       add_sync_log("─────── Compare ───────")
       add_sync_log("Starting comparison…")
       set_sync_progress(0, "Comparing installations", active = TRUE)
 
       tryCatch({
-        refresh_comparison(a_path, b_path, progress_detail = "Starting comparison")
+        refresh_comparison(src_path, tgt_path, progress_detail = "Starting comparison")
         comp <- comparison_data()
-        diff_statuses <- c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
-        if (!is.null(comp) && any(comp[["status"]] %in% diff_statuses)) {
-          selected_statuses(diff_statuses)
-        }
+        diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
+        selected_statuses(c("missing-from-target"))
         if (is.function(comparison_out)) comparison_out(comparison_data())
         diff_n <- sum(comparison_data()[["status"]] != "same")
         if (is.function(actionable_out)) actionable_out(diff_n)
@@ -1133,6 +1168,45 @@ mod_sync_server <- function(id,
 
       re_enable_compare()
     })
+
+    if (!is.null(refresh_request)) {
+      observeEvent(refresh_request(), {
+        req <- refresh_request()
+        src_path <- req$source_path %||% input$install_source
+        tgt_path <- req$target_path %||% input$install_target
+        if (is.null(src_path) || !nzchar(src_path) || is.null(tgt_path) || !nzchar(tgt_path)) {
+          return()
+        }
+
+        # Only the shipped-into libraries changed; the shared scan cache still
+        # holds fresh scans for everything else, so the refresh re-scans the
+        # minimum (usually just the target).
+        changed <- req$changed_paths %||% c(src_path, tgt_path)
+        for (p in changed) invalidate_manifest(p)
+        add_sync_log("─────── Refresh ───────")
+        add_sync_log("Custom Dispatch completed; refreshing all comparison tables.")
+        set_sync_progress(0, "Refreshing tables after Custom Dispatch", active = TRUE)
+
+        tryCatch({
+          refresh_comparison(
+            src_path,
+            tgt_path,
+            progress_detail = "Refreshing tables after Custom Dispatch"
+          )
+          comp <- comparison_data()
+          selected_statuses(c("missing-from-target"))
+          if (is.function(comparison_out)) comparison_out(comp)
+          diff_n <- if (is.null(comp)) 0L else sum(comp[["status"]] != "same")
+          if (is.function(actionable_out)) actionable_out(diff_n)
+          set_sync_progress(100, "Tables refreshed", active = FALSE)
+        }, error = function(e) {
+          set_sync_progress(0, "Refresh failed", active = FALSE)
+          add_sync_log("Refresh failed: ", e$message)
+          showNotification(paste("Refresh failed:", e$message), type = "error", duration = NULL)
+          if (is.function(push_error)) push_error(e$message, context = "Refreshing after Custom Dispatch")
+        })
+      }, ignoreNULL = TRUE)
+    }
 
     observeEvent(input$filter_statuses, {
       vals <- input$filter_statuses
@@ -1150,28 +1224,14 @@ mod_sync_server <- function(id,
       comp[comp[["status"]] %in% filter, ]
     })
 
-    # Map a ship() per-package status/message to a plain verb for the Result
-    # column. Plain text (not HTML) so the column can use a select-dropdown
-    # filter; colour is applied separately via formatStyle.
-    result_levels <- c("installed", "updated", "copied", "synced", "failed", "skipped")
-    result_label <- function(status, message) {
-      message <- message %||% ""
-      if (identical(status, "error"))   return("failed")
-      if (identical(status, "skipped")) return("skipped")
-      if (grepl("^Installed", message)) return("installed")
-      if (grepl("^Upgraded", message))  return("updated")
-      if (grepl("copied", message, ignore.case = TRUE)) return("copied")
-      "synced"
-    }
-
     output$comparison_table <- DT::renderDataTable({
       comp <- sync_comparison()
       if (is.null(comp)) {
         return(DT::datatable(
           data.frame(
             package = character(),
-            version_in_a = character(),
-            version_in_b = character(),
+            version_in_source = character(),
+            version_in_target = character(),
             status = character()
           ),
           filter = "top",
@@ -1180,54 +1240,39 @@ mod_sync_server <- function(id,
         ))
       }
 
-      a_version <- route_version(input$install_a)
-      b_version <- route_version(input$install_b)
+      src_version <- route_version(input$install_source)
+      tgt_version <- route_version(input$install_target)
       raw_status <- comp[["status"]]
-      a_lbl <- if (is.na(a_version)) "A" else paste0("R ", a_version)
-      b_lbl <- if (is.na(b_version)) "B" else paste0("R ", b_version)
+      src_lbl <- if (is.na(src_version)) "source" else paste0("R ", src_version)
+      tgt_lbl <- if (is.na(tgt_version)) "target" else paste0("R ", tgt_version)
       status_labels <- raw_status
-      status_labels[raw_status == "same"]           <- "same"
-      status_labels[raw_status == "newer-in-A"]     <- paste0("newer in ", a_lbl)
-      status_labels[raw_status == "newer-in-B"]     <- paste0("newer in ", b_lbl)
-      status_labels[raw_status == "missing-from-A"] <- paste0("not in ", a_lbl)
-      status_labels[raw_status == "missing-from-B"] <- paste0("not in ", b_lbl)
+      status_labels[raw_status == "same"]                <- "same"
+      status_labels[raw_status == "newer-in-source"]     <- paste0("newer in ", src_lbl)
+      status_labels[raw_status == "newer-in-target"]     <- paste0("newer in ", tgt_lbl)
+      status_labels[raw_status == "missing-from-source"] <- paste0("not in ", src_lbl)
+      status_labels[raw_status == "missing-from-target"] <- paste0("not in ", tgt_lbl)
 
       # Source: a package's source is the same in either installation; take
       # whichever side reported it, defaulting to "unknown".
-      src_a <- if ("source_in_a" %in% names(comp)) comp[["source_in_a"]] else rep(NA_character_, nrow(comp))
-      src_b <- if ("source_in_b" %in% names(comp)) comp[["source_in_b"]] else rep(NA_character_, nrow(comp))
-      source_col <- ifelse(!is.na(src_a) & nzchar(src_a), src_a, src_b)
+      repo_src <- if ("repo_in_source" %in% names(comp)) comp[["repo_in_source"]] else rep(NA_character_, nrow(comp))
+      repo_tgt <- if ("repo_in_target" %in% names(comp)) comp[["repo_in_target"]] else rep(NA_character_, nrow(comp))
+      source_col <- ifelse(!is.na(repo_src) & nzchar(repo_src), repo_src, repo_tgt)
       source_col <- ifelse(is.na(source_col) | !nzchar(source_col), "unknown", source_col)
 
-      # Result: per-package outcome from the most recent ship(), joined by name.
-      # Blank for untouched / "same" packages; failure reason shown on hover.
-      result_col <- rep("", nrow(comp))
-      res_obj <- last_ship_result()
-      if (!is.null(res_obj) && !is.null(res_obj$results) && nrow(res_obj$results) > 0) {
-        rr <- res_obj$results
-        idx <- match(comp[["package"]], rr$package)
-        result_col <- vapply(seq_along(idx), function(i) {
-          j <- idx[i]
-          if (is.na(j)) return("")
-          result_label(rr$status[[j]], rr$message[[j]])
-        }, character(1))
-      }
-
-      # factor() on source/result makes DT render a select-dropdown filter for
-      # those columns (instead of a free-text search box).
+      # factor() on source makes DT render a select-dropdown filter for the
+      # repository/source column instead of a free-text search box.
       display <- data.frame(
         package = comp[["package"]],
         source = factor(source_col),
-        version_in_a = ifelse(is.na(comp[["version_in_a"]]), "not installed", comp[["version_in_a"]]),
-        version_in_b = ifelse(is.na(comp[["version_in_b"]]), "not installed", comp[["version_in_b"]]),
+        version_in_source = ifelse(is.na(comp[["version_in_source"]]), "not installed", comp[["version_in_source"]]),
+        version_in_target = ifelse(is.na(comp[["version_in_target"]]), "not installed", comp[["version_in_target"]]),
         status = factor(status_labels),
-        result = factor(result_col, levels = c("", result_levels)),
         status_raw = raw_status,
-        status_rank = match(raw_status, c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B", "same")),
+        status_rank = match(raw_status, c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target", "same")),
         stringsAsFactors = FALSE
       )
 
-      diff_statuses <- c("missing-from-B", "missing-from-A", "newer-in-A", "newer-in-B")
+      diff_statuses <- c("missing-from-target", "missing-from-source", "newer-in-source", "newer-in-target")
 
       DT::datatable(
         display,
@@ -1237,10 +1282,9 @@ mod_sync_server <- function(id,
         colnames = c(
           "Package",
           "Source",
-          paste0("Version in ", a_lbl),
-          paste0("Version in ", b_lbl),
+          paste0("Version in ", src_lbl),
+          paste0("Version in ", tgt_lbl),
           "Status",
-          "Result",
           "status_raw",
           "status_rank"
         ),
@@ -1251,8 +1295,8 @@ mod_sync_server <- function(id,
           scrollX = FALSE,
           autoWidth = FALSE,
           dom = "rt<'sync-table-foot'lip>",
-          order = list(list(7, "asc"), list(0, "asc")),
-          columnDefs = list(list(targets = c(6, 7), visible = FALSE))
+          order = list(list(6, "asc"), list(0, "asc")),
+          columnDefs = list(list(targets = c(5, 6), visible = FALSE))
         ),
         class = "stripe hover compact sync-table"
       ) |>
@@ -1273,12 +1317,9 @@ mod_sync_server <- function(id,
           )
         ) |>
         DT::formatStyle(
-          "result",
-          fontWeight = 650,
-          color = DT::styleEqual(
-            c("installed", "updated", "copied", "synced", "failed", "skipped"),
-            c("#1f7a4d", "#1f7a4d", "#1f7a4d", "#1f7a4d", "#c0392b", "#6d879b")
-          )
+          "source",
+          color = DT::styleEqual("unknown", "#c0392b"),
+          fontWeight = DT::styleEqual("unknown", "600")
         )
     })
 
@@ -1312,13 +1353,13 @@ mod_sync_server <- function(id,
           div(
             class = "invoice-card",
             div(class = "invoice-head", "Estimate"),
-            line("to be copied",   inv$copy,   "invoice-copy",   "pure-R / local — no download or compile"),
-            line("to be installed", inv$binary, "invoice-binary", "compiled CRAN — pre-built binary"),
+            line("to be copied",   inv$copy,   "invoice-copy",   "local / private — no online source"),
+            line("to be installed", inv$binary, "invoice-binary", "CRAN — pre-built binary via pak"),
             line("to be compiled",  inv$source, "invoice-source", "Bioconductor / GitHub — slow"),
             div(
               class = "invoice-total",
               tags$span("Estimated time"),
-              tags$span(class = "invoice-total-val", fmt_duration(inv$secs))
+              tags$span(class = "invoice-total-val", inv$secs_text %||% fmt_duration(inv$secs))
             )
           )
         ),
@@ -1326,7 +1367,7 @@ mod_sync_server <- function(id,
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("confirm_sync"), "Ship", class = "btn-primary",
-            onclick = "if(window.courierStartTimer) window.courierStartTimer();",
+            onclick = "if(window.courierAppBusy) courierAppBusy(true); if(window.courierStartTimer) window.courierStartTimer();",
             style = "background: linear-gradient(90deg,#5f4ab4 0%,#8a52c8 100%); border:0; font-weight:800;")
         )
       ))
@@ -1346,8 +1387,8 @@ mod_sync_server <- function(id,
       }
       pending_sync(list(
         type        = "source_to_target",
-        source_path = input$install_a,
-        target_path = input$install_b,
+        source_path = input$install_source,
+        target_path = input$install_target,
         packages    = packages
       ))
       show_sync_confirmation(pending_sync())
@@ -1362,12 +1403,11 @@ mod_sync_server <- function(id,
       }
       src <- data.table::as.data.table(get_manifest(source_path))
       rows <- src[match(packages, src$package), ]
-      libpath <- if ("libpath" %in% names(rows)) rows$libpath else rep(NA_character_, n)
       src_col <- if ("source" %in% names(rows)) rows$source else rep(NA_character_, n)
-      compiled   <- !is.na(libpath) & nzchar(libpath) & file.exists(file.path(libpath, "libs"))
+      # Online mode reinstalls everything resolvable from a repository; only
+      # local/unknown-source packages are copied (mirrors ship()).
       resolvable <- !is.na(src_col) & src_col %in% c("CRAN", "Bioconductor", "GitHub")
-      needs_pak  <- resolvable & compiled
-      route <- ifelse(!needs_pak, "copied",
+      route <- ifelse(!resolvable, "copied",
                 ifelse(src_col %in% c("Bioconductor", "GitHub"), "compiled from source", "binary install"))
       data.frame(package = packages, route = route, stringsAsFactors = FALSE)
     }
@@ -1382,7 +1422,7 @@ mod_sync_server <- function(id,
         showNotification("Run Compare first.", type = "warning")
         return()
       }
-      batches <- build_batches(comp, input$install_a, input$install_b)
+      batches <- build_batches(comp, input$install_source, input$install_target)
       if (length(batches) == 0) {
         showNotification("Nothing to ship — the target already matches the source.", type = "message")
         return()
@@ -1397,7 +1437,7 @@ mod_sync_server <- function(id,
       n_copy   <- sum(rows$route == "copied")
       n_binary <- sum(rows$route == "binary install")
       n_source <- sum(rows$route == "compiled from source")
-      secs     <- n_copy * 0.5 + n_binary * 5 + n_source * 45
+      est      <- courieR:::estimate_ship_secs(n_copy, n_binary, n_source)
 
       # Always render all three tiers so the preview answers "how many copied /
       # installed / compiled" at a glance; zero-count tiers are muted, not hidden.
@@ -1417,14 +1457,25 @@ mod_sync_server <- function(id,
           action_summary_ui(n_copy, n_binary, n_source),
           div(class = "modal-ship-mode", mode_note_ui(mode)),
           div(
+            class = "preview-custom-dispatch-note",
+            tags$strong("Want to choose specific packages? "),
+            tags$span("Open "),
+            tags$a(
+              href = "#",
+              onclick = "var m=document.getElementById('shiny-modal'); if(m && window.bootstrap){var inst=bootstrap.Modal.getInstance(m); if(inst) inst.hide();} navigateToCustomDispatch(); return false;",
+              "Custom Dispatch"
+            ),
+            tags$span(" to cherry-pick before shipping.")
+          ),
+          div(
             class = "invoice-card",
             div(class = "invoice-head", "Estimate"),
-            line("to be copied",   n_copy,   "invoice-copy",   "pure-R / local — no download or compile"),
-            line("to be installed", n_binary, "invoice-binary", "compiled CRAN — pre-built binary"),
+            line("to be copied",   n_copy,   "invoice-copy",   "local / private — no online source"),
+            line("to be installed", n_binary, "invoice-binary", "CRAN — pre-built binary via pak"),
             line("to be compiled",  n_source, "invoice-source", "Bioconductor / GitHub — slow"),
             div(class = "invoice-total",
                 tags$span("Estimated time"),
-                tags$span(class = "invoice-total-val", fmt_duration(secs)))
+                tags$span(class = "invoice-total-val", est$text))
           ),
           DT::dataTableOutput(ns("preview_dt"))
         ),
@@ -1480,11 +1531,41 @@ mod_sync_server <- function(id,
 
       add_sync_log("─────── Ship ───────")
       add_sync_log("Preparing sync plan.")
-      add_sync_log("Tip: real-time output is shown in the RStudio console — monitor there, then return here for the summary.")
+      add_sync_log("Tip: real-time output is shown in the R console — monitor there, then return here for the summary.")
       add_sync_log("Base and recommended R packages are skipped; only user-installed packages are compared/synced.")
       add_sync_log("Current comparison before sync: ", comparison_counts_text(comparison_data()), ".")
 
       ship_start_time <- Sys.time()
+
+      # Hero panel helpers (live "X/Y delivered" panel in the log pane).
+      hero_js <- function(fn, arg = NULL) {
+        arg_js <- if (is.null(arg)) "" else jsonlite::toJSON(arg, auto_unbox = TRUE)
+        try(shinyjs::runjs(sprintf(
+          "if(window.courierBulkHero) window.courierBulkHero.%s(%s);", fn, arg_js
+        )), silent = TRUE)
+      }
+      bulk_delivered <- 0L
+      bulk_ship_log_cb <- function(...) {
+        add_sync_log(...)
+        msg <- paste0(...)
+        m <- regmatches(msg, regexec("^\\[(\\d+)/(\\d+)\\] (\\S+) - copying", msg))[[1]]
+        if (length(m) == 4L) {
+          hero_js("status", sprintf("Copying %s (%s/%s)…", m[[4]], m[[2]], m[[3]]))
+          return(invisible(NULL))
+        }
+        m2 <- regmatches(msg, regexec("^\\[ok\\] (\\S+) - copied", msg))[[1]]
+        if (length(m2) == 2L) {
+          bulk_delivered <<- bulk_delivered + 1L
+          hero_js("count", bulk_delivered)
+          hero_js("status", sprintf("%s delivered", m2[[2]]))
+          return(invisible(NULL))
+        }
+        if (grepl("^Reinstalling \\d+ package", msg))
+          hero_js("status", "Installing via pak — live output in R console…")
+        else if (grepl("^pak subprocess finished successfully", msg))
+          hero_js("status", "pak finished; verifying target library…")
+        invisible(NULL)
+      }
 
       result <- tryCatch({
         set_sync_progress(5, "Preparing sync plan", active = TRUE)
@@ -1500,7 +1581,13 @@ mod_sync_server <- function(id,
         failed_count <- 0L
         accumulated_results <- list()
         accumulated_plans   <- list()
-        add_sync_log("Estimated sync time: ", estimate_sync_time(total_count), ".")
+        bulk_est_text <- estimate_sync_time(plan$packages, plan$source_path, input$transfer_mode)
+        add_sync_log("Estimated sync time: ", bulk_est_text, " (calibrates from each completed ship).")
+        try(shinyjs::runjs(sprintf(
+          "if(window.courierBulkHero) window.courierBulkHero.start(%d, %s);",
+          length(plan$packages),
+          jsonlite::toJSON(bulk_est_text %||% "?", auto_unbox = TRUE)
+        )), silent = TRUE)
         batch_progress <- if (length(batches) == 0) 0 else 65 / length(batches)
         progress_start <- 10
 
@@ -1529,8 +1616,10 @@ mod_sync_server <- function(id,
             source_path = batch$source_path,
             target_path = batch$target_path,
             packages = batch$packages,
-            upgrade = TRUE,
-            log_callback = add_sync_log,
+            # FALSE still brings the named packages to the latest compatible
+            # version; TRUE would also upgrade every dependency in the target.
+            upgrade = FALSE,
+            log_callback = bulk_ship_log_cb,
             mode = input$transfer_mode,
             source_pkgs = get_manifest(batch$source_path),
             target_pkgs = get_manifest(batch$target_path)
@@ -1577,12 +1666,20 @@ mod_sync_server <- function(id,
           data.table::data.table(package = character(), action = character())
 
         elapsed <- as.numeric(difftime(Sys.time(), ship_start_time, units = "secs"))
-        last_ship_result(list(
-          results     = all_results,
-          plan        = all_plans,
-          elapsed_sec = elapsed
-        ))
-
+        # Calibrate the time estimator from what actually happened, when the
+        # ship was single-route (otherwise attribution is ambiguous).
+        if (nrow(all_results) > 0 && elapsed > 0) {
+          msgs <- all_results$message %||% rep("", nrow(all_results))
+          n_ok    <- sum(all_results$status == "success")
+          n_copy_ok <- sum(all_results$status == "success" &
+                             grepl("copied", msgs, ignore.case = TRUE))
+          if (n_ok > 0) {
+            route <- if (n_copy_ok == n_ok) "copy" else if (n_copy_ok == 0) "binary" else NA_character_
+            if (!is.na(route)) {
+              try(courieR:::record_ship_rate(route, elapsed / n_ok), silent = TRUE)
+            }
+          }
+        }
         # Overall summary to the log panel (replaces the old receipt panel).
         if (nrow(all_results) > 0) {
           st  <- all_results$status
@@ -1608,11 +1705,12 @@ mod_sync_server <- function(id,
           ))
         }
 
+        hero_js("stop")
         set_sync_progress(80, "Refreshing comparison after sync", active = TRUE)
         add_sync_log("Refreshing comparison after sync.")
         refresh_comparison(
-          input$install_a,
-          input$install_b,
+          input$install_source,
+          input$install_target,
           progress_detail = "Refreshing comparison after sync",
           pct_base = 80,
           pct_span = 18
@@ -1655,15 +1753,13 @@ mod_sync_server <- function(id,
       }
 
       pending_sync(NULL)
-      # Clear the status filter so successfully-synced packages (now "same")
-      # stay visible with their Result column populated.
-      selected_statuses(NULL)
+      selected_statuses(c("missing-from-target"))
       re_enable_compare()
       re_enable_btn("sync_btn")
     })
 
-    # Per-package outcomes now appear inline in the comparison table's Result
-    # column; the overall summary is written to the log panel after each sync.
+    # Per-package outcomes are summarized in the log; the comparison table is
+    # refreshed after each shipment instead of carrying a stale Result column.
 
     # ── Restock ───────────────────────────────────────────────────────────
     restock_pending <- reactiveVal(NULL)
@@ -1740,20 +1836,19 @@ mod_sync_server <- function(id,
       ))
     }
 
-    observeEvent(input$restock_a, { do_restock(install_a_path, "source") })
-    observeEvent(input$restock_b, { do_restock(install_b_path, "target") })
+    observeEvent(input$restock_source, { do_restock(install_source_path, "source") })
+    observeEvent(input$restock_target, { do_restock(install_target_path, "target") })
 
     observeEvent(input$confirm_restock, {
       plan <- restock_pending()
       removeModal()
       if (is.null(plan) || length(plan$cran_pkgs) == 0) { stop_busy(); return() }
 
-      lib_res <- processx::run(
-        plan$path, c("--vanilla", "-e", "cat(.libPaths()[1])"),
-        error_on_status = FALSE
-      )
-      tgt_lib <- trimws(lib_res$stdout)
-      if (lib_res$status != 0 || !nzchar(tgt_lib)) {
+      # find_target_lib strips the parent session's R_LIBS_USER and lets the
+      # target read its own startup files, so restock installs into the same
+      # library that manifest()/Compare scans.
+      tgt_lib <- tryCatch(courieR:::find_target_lib(plan$path), error = function(e) "")
+      if (!nzchar(tgt_lib)) {
         stop_busy()
         showNotification("Could not determine library path.", type = "error")
         return()

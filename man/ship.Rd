@@ -34,9 +34,12 @@ target are included.}
 installing anything. Use this to review what will happen before
 committing to a sync.}
 
-\item{upgrade}{If \code{TRUE}, packages already present in the target but at an
-older version than the source are upgraded. If \code{FALSE} (the default),
-only packages missing from the target are installed.}
+\item{upgrade}{Passed to \code{\link[pak:pkg_install]{pak::pkg_install()}} in online mode. The packages
+in the plan (missing or outdated in the target) are always installed at
+the latest compatible version regardless. If \code{TRUE}, pak additionally
+upgrades every outdated \emph{dependency} of those packages in the target
+library; if \code{FALSE} (the default), dependencies are only changed when a
+version requirement forces it, which is much faster.}
 
 \item{log_callback}{Optional function of one argument. When provided, it is
 called with a single character string for each progress message emitted

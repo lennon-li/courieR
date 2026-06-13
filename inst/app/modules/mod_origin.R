@@ -32,7 +32,9 @@ mod_origin_server <- function(id,
                               comparison_rv     = NULL,
                               to_r_path         = NULL,
                               sync_direction_rv  = NULL,
-                              transfer_mode_rv   = NULL) {
+                              transfer_mode_rv   = NULL,
+                              refresh_after_ship = NULL,
+                              shared_scans       = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     routes_rv  <- reactiveVal(NULL)
@@ -231,15 +233,30 @@ mod_origin_server <- function(id,
     })
 
     # ── Ship sub-module ───────────────────────────────────────────────────
+    # Rich label ("R 4.5.0 — AppData · lib: win-library/4.5") for a detected
+    # installation, so the ship header can show the library location too.
+    route_label <- function(path) {
+      routes <- routes_rv()
+      if (is.null(path) || !nzchar(path %||% "") ||
+          is.null(routes) || nrow(routes) == 0) return(NULL)
+      i <- match(path, routes$rscript_path)
+      if (is.na(i)) return(NULL)
+      lib <- if ("library" %in% names(routes)) routes$library[[i]] else NA_character_
+      depot_label(path, routes$version[[i]], lib)
+    }
+
     mod_depot_ship_server(
       "depot_ship",
+      route_label       = route_label,
+      shared_scans      = shared_scans,
       comparison_rv     = comparison_rv,
       from_r_path       = from_r_path,
       to_r_path         = to_r_path,
       sync_direction_rv  = sync_direction_rv,
       transfer_mode_rv   = transfer_mode_rv,
       push_error        = push_error,
-      incoming_search   = browse_to_ship_pkg
+      incoming_search   = browse_to_ship_pkg,
+      refresh_after_ship = refresh_after_ship
     )
   })
 }

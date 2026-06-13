@@ -49,3 +49,46 @@ test_that("find_routes handles nonexistent search_paths gracefully", {
   res <- find_routes(search_paths = "/nonexistent/path/to/r")
   expect_s3_class(res, "data.frame")
 })
+
+# Helper: create a fake Rscript executable that sleeps, then reports a valid
+# probe payload (major||SEP||minor||SEP||home||SEP||libs). Unix-only.
+local_fake_rscript <- function(sleep_secs, version_minor = "9.9",
+                               env = parent.frame()) {
+  dir <- withr::local_tempdir(.local_envir = env)
+  path <- file.path(dir, "Rscript")
+  writeLines(c(
+    "#!/bin/sh",
+    sprintf("sleep %s", sleep_secs),
+    sprintf(
+      "printf '4||SEP||%s||SEP||/fake/home||SEP||/fake/lib'",
+      version_minor
+    )
+  ), path)
+  Sys.chmod(path, "0755")
+  path
+}
+
+test_that("find_routes detects installs whose probe takes longer than 3s", {
+  skip_on_cran()
+  skip_on_os("windows")
+  # Regression: a hard 3s probe timeout silently dropped real R installs on
+  # slow machines (antivirus/OneDrive cold starts), so detection flickered
+  # between runs. The default timeout must comfortably absorb a slow start.
+  fake <- local_fake_rscript(sleep_secs = 4)
+  res <- find_routes(search_paths = fake)
+  # On macOS /var is a symlink to /private/var; find_routes() normalises via
+  # fs::path_real() so the comparison must use the resolved path too.
+  expect_true(fs::path_real(fake) %in% res$rscript_path)
+})
+
+test_that("find_routes probe timeout is configurable and warns when exceeded", {
+  skip_on_cran()
+  skip_on_os("windows")
+  fake <- local_fake_rscript(sleep_secs = 10)
+  withr::local_options(courier.probe_timeout = 0.5)
+  expect_warning(
+    res <- find_routes(search_paths = fake),
+    "timed out"
+  )
+  expect_false(fake %in% res$rscript_path)
+})

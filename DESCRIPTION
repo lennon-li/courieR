@@ -1,12 +1,21 @@
 Package: courieR
 Type: Package
 Title: Migrate Installed R Packages Between R Versions
-Version: 0.3.0
+Version: 0.3.1
 Authors@R:
-    person("Lennon", "Li", , "yeli@biostats.ai", role = c("aut", "cre"))
+    c(person("Lennon", "Li", , "yeli@biostats.ai", role = c("aut", "cre"),
+             comment = c(ORCID = "0000-0001-6338-7474")),
+      person("Claude Fable", role = "ctb",
+             comment = "AI co-author (Anthropic)"),
+      person("Claude Opus", role = "ctb",
+             comment = "AI co-author (Anthropic)"),
+      person("Claude Sonnet", role = "ctb",
+             comment = "AI co-author (Anthropic)"),
+      person("OpenAI Codex", role = "ctb",
+             comment = "AI co-author (OpenAI)"))
 Description: Detects all R installations on the current machine and migrates
     installed R packages between them. Provides find_routes() to discover R
-    versions, manifest() to scan package libraries via 'subprocess', inventory()
+    versions, manifest() to scan package libraries in a subprocess, inventory()
     to compare two libraries, and ship() to install packages into a target R
     version using 'pak'. Includes a Shiny dashboard (open_hub()) for interactive
     source-to-target migration.
@@ -39,5 +48,7 @@ Suggests:
     mockery (>= 0.4.4),
     knitr (>= 1.45),
     rmarkdown (>= 2.26),
-    pkgdown (>= 2.0.0)
+    pkgdown (>= 2.0.0),
+    shinytest2 (>= 0.3.0),
+    chromote (>= 0.1.0)
 VignetteBuilder: knitr
