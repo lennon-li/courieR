@@ -60,6 +60,7 @@ reference:
   - title: Utilities
     desc: Lower-level helpers used internally or for advanced scripting.
     contents:
+      - report_issue
       - wrap
       - starts_with("rig")
 
@@ -79,6 +80,7 @@ articles:
     navbar: ~
     contents:
       - get-started
+      - testing
 
 news:
   releases:
