@@ -13,7 +13,7 @@ multiple sources per platform, and returns a tidy data frame of results."><style
 
     <a class="navbar-brand me-2" href="../index.html">courieR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -26,6 +26,7 @@ multiple sources per platform, and returns a tidy data frame of results."><style
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/get-started.html">Getting Started with courieR</a></li>
+    <li><a class="dropdown-item" href="../articles/testing.html">Testing Guidelines and Platform Status</a></li>
   </ul></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-news" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">News</button>
@@ -86,7 +87,7 @@ this R is installed. Normalized lexically for comparison.</p></dd>
 
 <dt>library</dt>
 <dd><p>Character. The installation's primary library location
-(<code>.libPaths()[1]</code> under a vanilla session) — where <code><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages()</a></code>
+(<code>.libPaths()[1]</code> under a vanilla session) - where <code><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages()</a></code>
 writes by default. This is the effective package store; two installs
 that share a <code>library</code> hold the same packages. Normalized lexically for
 comparison. <code>NA</code> if it could not be determined.</p></dd>
@@ -99,31 +100,35 @@ comparison. <code>NA</code> if it could not be determined.</p></dd>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Detection sources by platform:</p>
-<p><strong>Windows</strong></p><ul><li><p>HKLM registry (<code>SOFTWARE\R-core\R</code>) — standard admin installs via
+<p><strong>Windows</strong></p><ul><li><p>HKLM registry (<code>SOFTWARE\R-core\R</code>) - standard admin installs via
 the CRAN Windows installer.</p></li>
-<li><p>HKCU registry (<code>SOFTWARE\R-core\R</code>) — non-admin installs that
+<li><p>HKCU registry (<code>SOFTWARE\R-core\R</code>) - non-admin installs that
 register under the current user hive only.</p></li>
-<li><p><code>%ProgramFiles%\R</code> — directory scan for admin installs not in the
+<li><p><code>%ProgramFiles%\R</code> - directory scan for admin installs not in the
 registry.</p></li>
-<li><p><code>%LOCALAPPDATA%\Programs\R</code> — rig-managed and other user-local
+<li><p><code>%LOCALAPPDATA%\Programs\R</code> - rig-managed and other user-local
 installs.</p></li>
-<li><p><code>%USERPROFILE%\Documents\R</code> — installs placed in the user's
+<li><p><code>%USERPROFILE%\Documents\R</code> - installs placed in the user's
 Documents folder.</p></li>
-<li><p>rig (<code>rig list</code>) — any additional versions managed by rig that
+<li><p>rig (<code>rig list</code>) - any additional versions managed by rig that
 were not found by path scanning.</p></li>
-</ul><p><strong>macOS</strong></p><ul><li><p><code>/Library/Frameworks/R.framework/Versions</code> — system-wide CRAN
+</ul><p><strong>macOS</strong></p><ul><li><p><code>/Library/Frameworks/R.framework/Versions</code> - system-wide CRAN
 installer.</p></li>
-<li><p><code>~/Library/Frameworks/R.framework/Versions</code> — user-local framework
+<li><p><code>~/Library/Frameworks/R.framework/Versions</code> - user-local framework
 installs (no admin required).</p></li>
 <li><p>Homebrew: <code>/opt/homebrew/opt/r</code> (Apple Silicon) and
 <code>/usr/local/opt/r</code> (Intel).</p></li>
-<li><p>rig (<code>rig list</code>) — rig-managed versions.</p></li>
-</ul><p><strong>Linux</strong></p><ul><li><p><code>/opt/R</code> — rig system-wide installs.</p></li>
-<li><p><code>~/.local/share/rig/R</code> — rig user-local installs.</p></li>
+<li><p>rig (<code>rig list</code>) - rig-managed versions.</p></li>
+</ul><p><strong>Linux</strong></p><ul><li><p><code>/opt/R</code> - rig system-wide installs.</p></li>
+<li><p><code>~/.local/share/rig/R</code> - rig user-local installs.</p></li>
 <li><p>conda environments (active <code>$CONDA_PREFIX</code>).</p></li>
 <li><p>System <code>Rscript</code> on <code>$PATH</code>.</p></li>
 </ul><p>Symlinks are resolved via <code><a href="https://fs.r-lib.org/reference/path_math.html" class="external-link">fs::path_real()</a></code> so that duplicate entries from
 different detection sources pointing to the same executable are collapsed.</p>
+<p>Each candidate is probed in a short subprocess. The probe timeout defaults
+to 30 seconds and can be adjusted via <code>options(courier.probe_timeout = )</code>;
+installations whose probe times out are skipped with a warning rather than
+silently dropped.</p>
     </div>
 
     <div class="section level2">

@@ -40,7 +40,7 @@ migrate(from, to, dry_run = FALSE, upgrade = TRUE, mode = "online", ...)
 
   Transfer mode passed to
   [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md):
-  `"online"` (default — reinstall via pak), `"offline"` (file-copy only,
+  `"online"` (default - reinstall via pak), `"offline"` (file-copy only,
   skip packages without a valid source path), or `"preserve"` (copy for
   exact version, fall back to a pinned pak spec on failure).
 

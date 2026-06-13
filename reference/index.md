@@ -31,6 +31,8 @@ full control.
 
 Lower-level helpers used internally or for advanced scripting.
 
+- [`report_issue()`](https://lennon-li.github.io/courieR/reference/report_issue.md)
+  : Report a bug or error to the courieR issue tracker
 - [`wrap()`](https://lennon-li.github.io/courieR/reference/wrap.md) :
   Generate a pak specification for a package
 - [`rig_available()`](https://lennon-li.github.io/courieR/reference/rig_available.md)

@@ -49,9 +49,14 @@ ship(
 
 - upgrade:
 
-  If `TRUE`, packages already present in the target but at an older
-  version than the source are upgraded. If `FALSE` (the default), only
-  packages missing from the target are installed.
+  Passed to
+  [`pak::pkg_install()`](https://pak.r-lib.org/reference/pkg_install.html)
+  in online mode. The packages in the plan (missing or outdated in the
+  target) are always installed at the latest compatible version
+  regardless. If `TRUE`, pak additionally upgrades every outdated
+  *dependency* of those packages in the target library; if `FALSE` (the
+  default), dependencies are only changed when a version requirement
+  forces it, which is much faster.
 
 - log_callback:
 

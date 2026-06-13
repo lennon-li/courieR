@@ -5,9 +5,22 @@ machine — migrate from old to new, or selectively copy packages from a
 source installation into a target installation. No manual reinstalling,
 no lost libraries.
 
+> This package is fully AI-implemented — co-authored by Claude Fable,
+> Claude Opus, Claude Sonnet, and OpenAI Codex via [Claude
+> Code](https://claude.ai/code) — with the author directing
+> requirements, reviewing every decision, and owning the outcome. A
+> proof-of-concept for human–AI co-authorship in open-source R.
+
 ## Installation
 
-Install from GitHub (CRAN submission in progress):
+Install from CRAN:
+
+``` r
+
+install.packages("courieR")
+```
+
+Or install the development version from GitHub:
 
 ``` r
 

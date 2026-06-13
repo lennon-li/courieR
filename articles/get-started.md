@@ -8,7 +8,14 @@ dashboard.
 
 ## Installation
 
-Install courieR from GitHub (CRAN submission in progress):
+Install courieR from CRAN:
+
+``` r
+
+install.packages("courieR")
+```
+
+Or install the development version from GitHub:
 
 ``` r
 
@@ -367,29 +374,66 @@ library(courieR)
 hub()
 ```
 
+### Bulk Dispatch
+
+The **Bulk Dispatch** tab compares two R libraries and ships all missing
+or outdated packages in one operation.
+
+![Bulk Dispatch: detect R installations, click Compare, review the
+colour-coded summary chips and package table, then Ship. The log pane on
+the right shows real-time progress; a live hero panel counts delivered
+packages during the ship.](figures/bulk_dispatch.gif)
+
+Bulk Dispatch: detect R installations, click Compare, review the
+colour-coded summary chips and package table, then Ship. The log pane on
+the right shows real-time progress; a live hero panel counts delivered
+packages during the ship.
+
 **Workflow:**
 
-1.  The dashboard scans all R installations on the machine automatically
-    — no configuration needed.
-2.  Select a **source** and a **target** installation from the sidebar
-    dropdowns. The target list is constrained to the same-or-newer R
-    version than the source, since an older R can’t reliably hold
-    packages built for a newer one.
-3.  Click **Compare** — a summary strip shows counts of identical,
-    missing, and version-mismatched packages. The table lists
-    differences first.
-4.  Click **Ship** to install or upgrade the source’s packages into the
-    target. To mirror two same-version installs, run the transfer again
-    with source and target swapped.
-5.  A confirmation dialog shows the package count and an estimated time.
-    Confirm to start.
-6.  The log pane shows real-time progress: each package, its pak spec,
-    success or failure, and a post-sync comparison refresh.
+1.  The dashboard scans all R installations automatically — no
+    configuration needed.
+2.  Select a **source** and a **target** from the sidebar. The target
+    list is constrained to the same-or-newer R minor version.
+3.  Click **Compare**. The coloured chips above the table show counts
+    for each status (missing from target, newer in source, etc.). By
+    default only *missing from target* packages are shown — click any
+    chip to add or remove statuses from the view.
+4.  Click **Ship** to install the source’s packages into the target. A
+    confirmation dialog shows the package count and an estimated time.
+5.  The log pane updates in real time; a live hero panel counts packages
+    as they are delivered. Detailed pak output streams to the R console.
 
 The first sync on a machine can take 1–2 minutes while pak builds its
 metadata cache. Subsequent syncs are faster.
 
-The **Browse** and **Manifest** tabs expose
+### Custom Dispatch
+
+The **Custom Dispatch** tab lets you cherry-pick individual packages
+instead of bulk-shipping everything.
+
+![Custom Dispatch: colour-coded filter chips narrow the table to the
+statuses you care about; check individual packages and press Ship. The
+Repo column highlights packages with an unknown source in
+red.](figures/custom_dispatch.gif)
+
+Custom Dispatch: colour-coded filter chips narrow the table to the
+statuses you care about; check individual packages and press Ship. The
+Repo column highlights packages with an unknown source in red.
+
+**Workflow:**
+
+1.  After a Compare in Bulk Dispatch, open the **Custom Dispatch** tab —
+    the same comparison is shared, so no rescan is needed.
+2.  Use the coloured filter chips to narrow the table (default: *not in
+    target* only). Click any chip to toggle that status group on or off.
+3.  The **Repo** column shows each package’s origin (CRAN, Bioconductor,
+    GitHub, or red **unknown** for local/private packages).
+4.  Check the packages you want to ship, choose **Install online** or
+    **Ship as-is**, and press **Ship N selected**.
+5.  The log pane and hero panel track progress in real time.
+
+The **Browse** and **Manifest** panels under the **Tools** tab expose
 [`manifest()`](https://lennon-li.github.io/courieR/reference/manifest.md)
 output and let you inspect any detected R installation’s full package
 list.

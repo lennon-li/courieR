@@ -11,7 +11,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">courieR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -24,6 +24,7 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/get-started.html">Getting Started with courieR</a></li>
+    <li><a class="dropdown-item" href="../articles/testing.html">Testing Guidelines and Platform Status</a></li>
   </ul></li>
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-news" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">News</button>
@@ -48,17 +49,56 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="courier-development-version">courieR (development version)<a class="anchor" aria-label="anchor" href="#courier-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.3.1" id="courier-031">courieR 0.3.1<a class="anchor" aria-label="anchor" href="#courier-031"></a></h2>
 <div class="section level3">
-<h3 id="dashboard-ux-development-version">Dashboard UX<a class="anchor" aria-label="anchor" href="#dashboard-ux-development-version"></a></h3>
+<h3 id="bug-fixes-0-3-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-1"></a></h3>
+<ul><li>Fixed a second cause of shipped packages never showing up as installed, on the <em>copy</em> path (offline/preserve modes and online mode’s local/private packages). A manifest’s <code>libpath</code> is the library directory shared by every package, but <code>.copy_plan()</code> passed it through as if it were the per-package source, so each “copy” recursively cloned the entire source library into <code>target/&lt;pkg&gt;/</code> — leaving no valid package where R looks and reporting a silent success. The package name is now joined onto the library path, which also restores the cross-major compiled-package warning (its <code>libs/</code> check was always false before). Covered by a <code>.copy_plan</code> + <code>copy_packages</code> regression test and an opt-in browser end-to-end test (<code>COURIER_E2E=true</code>).</li>
+<li>R installation detection no longer drops installs intermittently on slow machines. <code><a href="../reference/find_routes.html">find_routes()</a></code> probed each candidate with a hard 3 s timeout and silently discarded any that exceeded it, so a cold R start (antivirus, OneDrive-synced installs) made versions flicker in and out between runs. The default probe timeout is now 30 s, configurable via <code>options(courier.probe_timeout = )</code>, and a probe that does time out is reported with a warning instead of vanishing; the <code>rig list</code> timeout was also raised from 5 s to 15 s.</li>
+<li>Fixed shipped packages never showing up as installed: <code><a href="../reference/find_target_lib.html">find_target_lib()</a></code> and the pak install subprocess inherited the parent R session’s <code>R_LIBS_USER</code>, so <code><a href="../reference/ship.html">ship()</a></code> installed into the <em>parent’s</em> library while Compare scanned the real target. All subprocesses that launch another R now share one environment-stripping helper (<code>child_r_env()</code>), and the install destination is guaranteed to be a library that <code><a href="../reference/manifest.html">manifest()</a></code> scans.</li>
+<li>Library scans that time out are no longer cached as “empty library” for the rest of the session; timeouts are reported loudly in the log and the scan timeout was raised from 30 s to 5 min for slow machines.</li>
+<li>The “both installations share one library” warning no longer fires vacuously when both scans returned no packages.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="routing-0-3-1">Routing<a class="anchor" aria-label="anchor" href="#routing-0-3-1"></a></h3>
+<ul><li>Online mode now means online: every package resolvable from CRAN / Bioconductor / GitHub is reinstalled via pak (binaries preferred). Only local/private packages with no online source are copied from the source library. (Previously pure-R CRAN packages were file-copied even in online mode, which is much slower than pak on synced/network libraries.)</li>
+</ul></div>
+<div class="section level3">
+<h3 id="performance-0-3-1">Performance<a class="anchor" aria-label="anchor" href="#performance-0-3-1"></a></h3>
+<ul><li>One manifest scan per library per session, shared across all tabs: a ship right after Compare reuses the Compare scans and spawns no scan subprocesses; the post-ship refresh rescans only the shipped-into library.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="dashboard-ux-0-3-1">Dashboard UX<a class="anchor" aria-label="anchor" href="#dashboard-ux-0-3-1"></a></h3>
+<ul><li>
+<strong>Bulk Dispatch</strong> now shows a live hero panel during shipping (matching Custom Dispatch): packages delivered so far, the current package being installed, elapsed time, and the estimated total. The detailed log in the R console is also mirrored in the dashboard log pane.</li>
+<li>Both <strong>Bulk Dispatch</strong> and <strong>Custom Dispatch</strong> tables now default to showing only packages missing from the target after Compare, instead of all diff statuses. The filter chip bar lets you toggle other statuses.</li>
+<li>
+<strong>Custom Dispatch</strong> filter chips are now colour-coded — orange for source-side differences (newer in source, not in target), teal for target-side differences — matching Bulk Dispatch.</li>
+<li>
+<strong>Custom Dispatch</strong> comparison table gains a <strong>Repo</strong> column showing where the package comes from (CRAN, Bioconductor, GitHub, etc.). Packages with an unknown source are shown in red in both tables.</li>
+<li>
+<code><a href="../reference/report_issue.html">report_issue()</a></code> — new exported function. Call it from the console after any error to open a pre-filled GitHub issue form in your browser with your R version, platform, courieR version, and the error message already populated. The dashboard’s error modal gains a <strong>Send Report</strong> button that does the same in one click.</li>
+<li>Custom Dispatch shows a live green hero panel while shipping: packages delivered so far, the package currently being copied/installed, elapsed time, and the estimated total.</li>
+<li>Time estimates (plan summary, ship confirmation, preview invoice) now come from per-machine calibrated rates persisted across sessions — every completed ship updates them — instead of fixed constants that were off by 100x on synced/network drives.</li>
+<li>Custom Dispatch source/target header now shows the R version, install location, and library path of both installations (was the bare executable path).</li>
+<li>After a Custom Dispatch shipment the comparison tables refresh automatically and the depot log says so; the refresh is logged when it completes.</li>
+<li>
+<code><a href="https://lennon-li.github.io/courieR/">library(courieR)</a></code> startup message now includes a link to the user guide vignette (<code><a href="../articles/get-started.html">vignette("get-started", package = "courieR")</a></code>).</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.0" id="courier-030">courieR 0.3.0<a class="anchor" aria-label="anchor" href="#courier-030"></a></h2>
+<div class="section level3">
+<h3 id="dashboard-ux-0-3-0">Dashboard UX<a class="anchor" aria-label="anchor" href="#dashboard-ux-0-3-0"></a></h3>
 <ul><li>Flattened the dashboard navigation from three nested tab levels to a single row of five top-level tabs: <strong>Bulk Dispatch</strong>, <strong>Browse</strong>, <strong>Custom Dispatch</strong>, <strong>Manifest</strong>, and <strong>Maintenance</strong>. The former <strong>Advanced</strong> wrapper tab is gone.</li>
 <li>Renamed <strong>Dispatch</strong> → <strong>Bulk Dispatch</strong>, and the former <strong>Ship</strong> sub-tab is now the top-level <strong>Custom Dispatch</strong> tab.</li>
 <li>
 <strong>Custom Dispatch</strong> now uses a two-pane layout — the package table on the left and a live log panel (with a delivery receipt) on the right — mirroring Bulk Dispatch. Its comparison columns are labelled <strong>Source</strong> / <strong>Target</strong> (was <em>Version A</em> / <em>Version B</em>), its filter chips read “newer in source / newer in target / not in target / not in source”, and the redundant <code>A → B</code> context bar was removed.</li>
 </ul></div>
-</div>
-    <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.3.0" id="courier-030">courieR 0.3.0<a class="anchor" aria-label="anchor" href="#courier-030"></a></h2>
+<div class="section level3">
+<h3 id="performance-0-3-0">Performance<a class="anchor" aria-label="anchor" href="#performance-0-3-0"></a></h3>
+<ul><li>Shipping no longer upgrades the entire dependency tree of each selected package: the dashboard now calls <code><a href="../reference/ship.html">ship()</a></code> with <code>upgrade = FALSE</code>. Selected packages still install or upgrade to the latest compatible version, but their already-installed dependencies are left alone unless a version requirement forces a change. This removes the main cause of multi-minute single-package shipments.</li>
+<li>Custom Dispatch now scans each library at most once per Ship click and passes the scans to <code><a href="../reference/ship.html">ship()</a></code> (<code>source_pkgs</code>/<code>target_pkgs</code>), instead of re-scanning both libraries for every batch.</li>
+</ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-0-3-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-0"></a></h3>
 <ul><li>
@@ -66,7 +106,7 @@
 <li>Dashboard: fixed “Operation not allowed without an active reactive context” on startup, caused by reading a <code>reactiveVal</code> outside a reactive consumer in the sync log helper (now wrapped in <code>isolate()</code>).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="dashboard-ux-0-3-0">Dashboard UX<a class="anchor" aria-label="anchor" href="#dashboard-ux-0-3-0"></a></h3>
+<h3 id="dashboard-ux-0-3-0-1">Dashboard UX<a class="anchor" aria-label="anchor" href="#dashboard-ux-0-3-0-1"></a></h3>
 <ul><li>Renamed the core actions to match courieR’s shipping vocabulary: <strong>Scout</strong> (detect installations), <strong>Inventory</strong> (compare libraries), and <strong>Ship</strong> (transfer packages). The main tab is now <strong>Dispatch</strong>, and the Advanced tabs are <strong>Restock</strong>, <strong>Depot</strong>, <strong>Delivery Receipt</strong>, <strong>Route</strong>, and <strong>Manifest</strong>.</li>
 <li>Detection is no longer automatic on startup; click <strong>Scout</strong> to scan. A <code>Scout → Inventory → Ship</code> workflow note appears in the control panel, and the result is shared across tabs.</li>
 <li>The logo twinkles while the app is busy (tied to Shiny’s busy/idle events).</li>
