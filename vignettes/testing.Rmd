@@ -145,7 +145,7 @@ Last updated: 2026-06-13.
 |---|---|:---:|:---:|:---:|:---:|
 | **Windows 11** (OneDrive + Defender) | Human — Lennon Li | ✅ | ✅ | ⬜ | ✅ |
 | **Linux** — WSL2 Ubuntu 24.04, R 4.6.0 | Agent — Claude Code (Ming) | ✅ | ✅ | ✅ | ✅ partial |
-| **macOS** | Agent — pending | ⬜ | ⬜ | ⬜ | ⬜ |
+| **macOS** — Mac mini, Apple Silicon, R 4.6.0 | Agent — Claude Code | ✅ | ✅ | ⬜ | ⬜ |
 
 **Legend:** ✅ pass &nbsp;·&nbsp; ❌ fail &nbsp;·&nbsp; ⚠️ pass with caveats &nbsp;·&nbsp; ⬜ not yet run
 
@@ -167,7 +167,39 @@ Last updated: 2026-06-13.
   installed with a valid layout and loadable from target R.
 - `R CMD check --as-cran --no-manual` produces 0 errors, 0 warnings, 0 notes.
 
-### macOS notes (for the agent running the test)
+### macOS notes
+
+**Results — 2026-06-13, Mac mini (Apple Silicon), R 4.6.0**
+
+`devtools::test()`: FAIL 0 | WARN 0 | SKIP 16 | PASS 180
+
+`devtools::check(manual = FALSE, vignettes = FALSE)`: 0 errors | 0 warnings | 1 note
+
+The 1 note is the `:::` call to `.build_issue_url()` inside `mod_error_reporter.R`.
+This is intentional — the function is package-internal and called only from the
+embedded Shiny app, not from user code.
+
+**macOS-specific quirks discovered**
+
+1. **`/var` → `/private/var` symlink.** `withr::local_tempdir()` returns paths
+   under `/var/folders/...`, but `find_routes()` normalises paths via
+   `fs::path_real()`, resolving them to `/private/var/folders/...`. The test
+   `"find_routes detects installs whose probe takes longer than 3s"` was failing
+   because `fake %in% res$rscript_path` compared the unresolved path against the
+   resolved one. Fixed by wrapping `fake` in `fs::path_real()` in the test
+   assertion.
+
+2. **CRAN framework `R_HOME` overwrite.** The official CRAN macOS framework
+   wrapper scripts (`Resources/bin/R`) hardcode `R_HOME_DIR` to the symlink
+   `/Library/Frameworks/R.framework/Resources`, which always points to the
+   *current* active version. Running any version-specific wrapper therefore
+   redirects `R_HOME` to whichever version is set as `Current`. Multi-version
+   integration tests must use `rig`-managed binaries or the `exec/R` binary
+   directly; the standard framework wrappers are unreliable for version
+   isolation. The test suite skips multi-install integration tests automatically
+   when only one distinct library is detected.
+
+**For future macOS agent runs**
 
 Follow the steps below in order.
 

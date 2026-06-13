@@ -76,7 +76,9 @@ test_that("find_routes detects installs whose probe takes longer than 3s", {
   # between runs. The default timeout must comfortably absorb a slow start.
   fake <- local_fake_rscript(sleep_secs = 4)
   res <- find_routes(search_paths = fake)
-  expect_true(fake %in% res$rscript_path)
+  # On macOS /var is a symlink to /private/var; find_routes() normalises via
+  # fs::path_real() so the comparison must use the resolved path too.
+  expect_true(fs::path_real(fake) %in% res$rscript_path)
 })
 
 test_that("find_routes probe timeout is configurable and warns when exceeded", {
