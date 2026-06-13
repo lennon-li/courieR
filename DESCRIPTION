@@ -39,5 +39,7 @@ Suggests:
     mockery (>= 0.4.4),
     knitr (>= 1.45),
     rmarkdown (>= 2.26),
-    pkgdown (>= 2.0.0)
+    pkgdown (>= 2.0.0),
+    shinytest2 (>= 0.3.0),
+    chromote (>= 0.1.0)
 VignetteBuilder: knitr

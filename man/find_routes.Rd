@@ -72,6 +72,11 @@ installs (no admin required).
 
 Symlinks are resolved via \code{fs::path_real()} so that duplicate entries from
 different detection sources pointing to the same executable are collapsed.
+
+Each candidate is probed in a short subprocess. The probe timeout defaults
+to 30 seconds and can be adjusted via \code{options(courier.probe_timeout = )};
+installations whose probe times out are skipped with a warning rather than
+silently dropped.
 }
 \examples{
 \donttest{

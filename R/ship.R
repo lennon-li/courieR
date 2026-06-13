@@ -43,11 +43,17 @@ find_target_lib <- function(target_path) {
 .copy_plan <- function(plan) {
   plan <- data.table::as.data.table(plan)
   lib_col <- intersect(c("libpath", "libpath.x"), names(plan))[1]
-  libpath <- if (!is.na(lib_col)) as.character(plan[[lib_col]]) else rep(NA_character_, nrow(plan))
-  compiled <- !is.na(libpath) & nzchar(libpath) & file.exists(file.path(libpath, "libs"))
+  libdir <- if (!is.na(lib_col)) as.character(plan[[lib_col]]) else rep(NA_character_, nrow(plan))
+  # A manifest's `libpath` is the LIBRARY directory, shared by every package in
+  # it; the per-package source is <library>/<package>. Join the package name so
+  # copy_packages copies the package into target/<pkg> — without this it copies
+  # the entire library into target/<pkg>/, leaving no valid package where R looks.
+  pkg_src <- ifelse(!is.na(libdir) & nzchar(libdir),
+                    file.path(libdir, plan$package), NA_character_)
+  compiled <- !is.na(pkg_src) & file.exists(file.path(pkg_src, "libs"))
   data.table::data.table(
     package = plan$package,
-    libpath = libpath,
+    libpath = pkg_src,
     compiled = compiled
   )
 }

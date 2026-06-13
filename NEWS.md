@@ -2,6 +2,24 @@
 
 ## Bug fixes
 
+* Fixed a second cause of shipped packages never showing up as installed, on
+  the *copy* path (offline/preserve modes and online mode's local/private
+  packages). A manifest's `libpath` is the library directory shared by every
+  package, but `.copy_plan()` passed it through as if it were the per-package
+  source, so each "copy" recursively cloned the entire source library into
+  `target/<pkg>/` — leaving no valid package where R looks and reporting a
+  silent success. The package name is now joined onto the library path, which
+  also restores the cross-major compiled-package warning (its `libs/` check was
+  always false before). Covered by a `.copy_plan` + `copy_packages` regression
+  test and an opt-in browser end-to-end test (`COURIER_E2E=true`).
+* R installation detection no longer drops installs intermittently on slow
+  machines. `find_routes()` probed each candidate with a hard 3 s timeout and
+  silently discarded any that exceeded it, so a cold R start (antivirus,
+  OneDrive-synced installs) made versions flicker in and out between runs. The
+  default probe timeout is now 30 s, configurable via
+  `options(courier.probe_timeout = )`, and a probe that does time out is
+  reported with a warning instead of vanishing; the `rig list` timeout was
+  also raised from 5 s to 15 s.
 * Fixed shipped packages never showing up as installed: `find_target_lib()`
   and the pak install subprocess inherited the parent R session's
   `R_LIBS_USER`, so `ship()` installed into the *parent's* library while
