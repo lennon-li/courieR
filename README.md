@@ -7,6 +7,8 @@
 ![AI-implemented](https://img.shields.io/badge/AI--implemented-Claude%20Code-7C3AED)
 <!-- badges: end -->
 
+**[📖 Documentation →](https://lennon-li.github.io/courieR/)**
+
 courieR syncs installed R packages between R versions on the same machine — migrate from old to new, or selectively copy packages from a source installation into a target installation. No manual reinstalling, no lost libraries.
 
 > This package is fully AI-implemented — co-authored by Claude Fable, Claude
