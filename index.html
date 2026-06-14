@@ -172,23 +172,39 @@
 </table>
 </div>
 <div class="section level2">
-<h2 id="dashboard--bulk-dispatch">Dashboard — Bulk Dispatch<a class="anchor" aria-label="anchor" href="#dashboard--bulk-dispatch"></a>
+<h2 id="dashboard">Dashboard<a class="anchor" aria-label="anchor" href="#dashboard"></a>
 </h2>
-<p>The dashboard has five flat tabs — <strong>Bulk Dispatch</strong>, <strong>Browse</strong>, <strong>Custom Dispatch</strong>, <strong>Manifest</strong>, and <strong>Maintenance</strong>. <strong>Bulk Dispatch</strong> is the main workflow:</p>
-<ol style="list-style-type: decimal">
-<li>The header bar shows all detected installations (highlighted in the source/target accent colours once selected)</li>
-<li>Select a <strong>source</strong> and a <strong>target</strong> R installation from the dropdowns in the sidebar. The target list is constrained to the same-or-newer R version than the source, since an older R can’t reliably hold packages built for a newer one.</li>
-<li>Click <strong>Compare</strong> — a summary strip shows counts of identical, missing, and version-mismatched packages</li>
-<li>Click <strong>Ship</strong> — installs or upgrades the source’s packages into the target. To mirror two same-version installs, run the transfer again with source and target swapped.</li>
-</ol>
-<p>The comparison table lists unmatched and outdated packages first, ahead of packages that already match. Before a sync starts, the confirmation dialog shows an approximate time range based on the number of packages. During sync, the dashboard shows progress details and a log of the package list, completion state, and any failures. When sync finishes, courieR rescans both selected installations and refreshes the comparison automatically.</p>
-<p>The remaining tabs cover narrower workflows: <strong>Browse</strong> inspects any single detected installation’s package list, <strong>Custom Dispatch</strong> lets you cherry-pick individual packages to ship (with a side-by-side <strong>Source</strong>/<strong>Target</strong> table and its own log panel), <strong>Manifest</strong> reports an installation’s full inventory, and <strong>Maintenance</strong> restocks an installation from CRAN.</p>
+<p>Launch the interactive Shiny dashboard with:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://lennon-li.github.io/courieR/">courieR</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/open_hub.html">hub</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>The dashboard contains five flat tabs: <strong>Bulk Dispatch</strong>, <strong>Browse</strong>, <strong>Custom Dispatch</strong>, <strong>Manifest</strong>, and <strong>Maintenance</strong>.</p>
+<div class="section level3">
+<h3 id="bulk-dispatch">Bulk Dispatch<a class="anchor" aria-label="anchor" href="#bulk-dispatch"></a>
+</h3>
+<p>The <strong>Bulk Dispatch</strong> tab compares two R libraries and ships all missing or outdated packages in one operation.</p>
+<div class="float">
+<img src="articles/figures/bulk_dispatch.gif" alt="Bulk Dispatch"><div class="figcaption">Bulk Dispatch</div>
+</div>
+<p><strong>Workflow:</strong> 1. The header bar shows all detected installations (highlighted in the source/target accent colours once selected). 2. Select a <strong>source</strong> and a <strong>target</strong> R installation from the dropdowns in the sidebar. The target list is constrained to same-or-newer R versions. 3. Click <strong>Compare</strong> — the coloured chips above the table show counts of identical, missing, and version-mismatched packages. By default, only packages <em>missing from target</em> are shown. 4. Click <strong>Ship</strong> — a confirmation dialog shows the package count and estimated duration, then installs/upgrades packages into the target. 5. The log pane and a live hero panel track delivery progress in real time.</p>
+<p>The comparison table lists unmatched and outdated packages first, ahead of packages that already match. When sync finishes, courieR rescans both selected installations and refreshes the comparison automatically.</p>
+</div>
+<div class="section level3">
+<h3 id="custom-dispatch">Custom Dispatch<a class="anchor" aria-label="anchor" href="#custom-dispatch"></a>
+</h3>
+<p>The <strong>Custom Dispatch</strong> tab lets you cherry-pick individual packages instead of bulk-shipping everything.</p>
+<div class="float">
+<img src="articles/figures/custom_dispatch.gif" alt="Custom Dispatch"><div class="figcaption">Custom Dispatch</div>
+</div>
+<p><strong>Workflow:</strong> 1. After running Compare in Bulk Dispatch, open the <strong>Custom Dispatch</strong> tab — the same comparison is shared instantly. 2. Use the coloured filter chips to narrow down the table (default: <em>missing from target</em>). 3. The <strong>Repo</strong> column shows each package’s origin (CRAN, Bioconductor, GitHub, or red <strong>unknown</strong> for local/private packages). 4. Check the packages you want to ship, choose <strong>Install online</strong> or <strong>Ship as-is</strong>, and press <strong>Ship N selected</strong>. 5. The log pane and hero panel track custom progress in real time.</p>
+<p>The remaining tabs cover narrower workflows: <strong>Browse</strong> inspects any single detected installation’s package list, <strong>Manifest</strong> reports full inventory, and <strong>Maintenance</strong> restocks an installation from CRAN.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="cli-usage">CLI Usage<a class="anchor" aria-label="anchor" href="#cli-usage"></a>
 </h2>
 <p>Prefer scripting? Use <code><a href="reference/ship.html">ship()</a></code> directly:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://lennon-li.github.io/courieR/">courieR</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">routes</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/find_routes.html">find_routes</a></span><span class="op">(</span><span class="op">)</span></span>

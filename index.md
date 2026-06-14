@@ -73,38 +73,64 @@ of whether admin rights were used:
 | [`inventory()`](https://lennon-li.github.io/courieR/reference/inventory.md) | Compare two package libraries |
 | [`ship()`](https://lennon-li.github.io/courieR/reference/ship.md) | Full-control migration (custom paths, callbacks) |
 
-## Dashboard — Bulk Dispatch
+## Dashboard
 
-The dashboard has five flat tabs — **Bulk Dispatch**, **Browse**,
-**Custom Dispatch**, **Manifest**, and **Maintenance**. **Bulk
-Dispatch** is the main workflow:
+Launch the interactive Shiny dashboard with:
 
-1.  The header bar shows all detected installations (highlighted in the
-    source/target accent colours once selected)
-2.  Select a **source** and a **target** R installation from the
-    dropdowns in the sidebar. The target list is constrained to the
-    same-or-newer R version than the source, since an older R can’t
-    reliably hold packages built for a newer one.
-3.  Click **Compare** — a summary strip shows counts of identical,
-    missing, and version-mismatched packages
-4.  Click **Ship** — installs or upgrades the source’s packages into the
-    target. To mirror two same-version installs, run the transfer again
-    with source and target swapped.
+``` r
+
+library(courieR)
+hub()
+```
+
+The dashboard contains five flat tabs: **Bulk Dispatch**, **Browse**,
+**Custom Dispatch**, **Manifest**, and **Maintenance**.
+
+### Bulk Dispatch
+
+The **Bulk Dispatch** tab compares two R libraries and ships all missing
+or outdated packages in one operation.
+
+![Bulk Dispatch](articles/figures/bulk_dispatch.gif)
+
+Bulk Dispatch
+
+**Workflow:** 1. The header bar shows all detected installations
+(highlighted in the source/target accent colours once selected). 2.
+Select a **source** and a **target** R installation from the dropdowns
+in the sidebar. The target list is constrained to same-or-newer R
+versions. 3. Click **Compare** — the coloured chips above the table show
+counts of identical, missing, and version-mismatched packages. By
+default, only packages *missing from target* are shown. 4. Click
+**Ship** — a confirmation dialog shows the package count and estimated
+duration, then installs/upgrades packages into the target. 5. The log
+pane and a live hero panel track delivery progress in real time.
 
 The comparison table lists unmatched and outdated packages first, ahead
-of packages that already match. Before a sync starts, the confirmation
-dialog shows an approximate time range based on the number of packages.
-During sync, the dashboard shows progress details and a log of the
-package list, completion state, and any failures. When sync finishes,
-courieR rescans both selected installations and refreshes the comparison
-automatically.
+of packages that already match. When sync finishes, courieR rescans both
+selected installations and refreshes the comparison automatically.
+
+### Custom Dispatch
+
+The **Custom Dispatch** tab lets you cherry-pick individual packages
+instead of bulk-shipping everything.
+
+![Custom Dispatch](articles/figures/custom_dispatch.gif)
+
+Custom Dispatch
+
+**Workflow:** 1. After running Compare in Bulk Dispatch, open the
+**Custom Dispatch** tab — the same comparison is shared instantly. 2.
+Use the coloured filter chips to narrow down the table (default:
+*missing from target*). 3. The **Repo** column shows each package’s
+origin (CRAN, Bioconductor, GitHub, or red **unknown** for local/private
+packages). 4. Check the packages you want to ship, choose **Install
+online** or **Ship as-is**, and press **Ship N selected**. 5. The log
+pane and hero panel track custom progress in real time.
 
 The remaining tabs cover narrower workflows: **Browse** inspects any
-single detected installation’s package list, **Custom Dispatch** lets
-you cherry-pick individual packages to ship (with a side-by-side
-**Source**/**Target** table and its own log panel), **Manifest** reports
-an installation’s full inventory, and **Maintenance** restocks an
-installation from CRAN.
+single detected installation’s package list, **Manifest** reports full
+inventory, and **Maintenance** restocks an installation from CRAN.
 
 ## CLI Usage
 
