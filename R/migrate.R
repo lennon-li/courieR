@@ -37,13 +37,24 @@ migrate <- function(from, to, dry_run = FALSE, upgrade = TRUE, mode = "online", 
   }
 
   resolve <- function(x, label) {
-    hit <- routes[routes$version == x | routes$rscript_path == x, ]
+    hit <- routes[
+      routes$version == x |
+      startsWith(routes$version, paste0(x, ".")) |
+      routes$rscript_path == x,
+    ]
     if (nrow(hit) == 0) {
       available <- paste(routes$version, collapse = ", ")
       cli::cli_abort(c(
         "No R installation matched {.val {x}} for {label}.",
         "i" = "Detected versions: {available}",
         "i" = "Pass a full Rscript path if the version string is ambiguous."
+      ))
+    }
+    if (nrow(hit) > 1) {
+      versions <- paste(hit$version, collapse = ", ")
+      cli::cli_abort(c(
+        "{.val {x}} matches multiple R installations for {label}: {versions}.",
+        "i" = "Pass the full version string or Rscript path to disambiguate."
       ))
     }
     hit$rscript_path[[1]]
