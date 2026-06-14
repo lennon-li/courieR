@@ -62,6 +62,7 @@ reference:
     contents:
       - report_issue
       - wrap
+      - report_issue
       - starts_with("rig")
 
   - title: Internal
@@ -84,5 +85,7 @@ articles:
 
 news:
   releases:
+  - text: "0.3.1"
+    href: https://github.com/lennon-li/courieR/releases/tag/v0.3.1
   - text: "0.2.3"
     href: https://github.com/lennon-li/courieR/releases/tag/v0.2.3
