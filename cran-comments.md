@@ -1,7 +1,12 @@
 ## Resubmission
 
-This is a resubmission. The incoming pre-test on 2026-06-14 flagged 3 NOTEs,
-all now resolved:
+This is a resubmission. The second incoming pre-test on 2026-06-14 flagged 1 NOTE,
+now resolved:
+
+* **"Non-standard file/directory found at top level: 'pkgdown'"** — added
+  `^pkgdown$` to `.Rbuildignore`.
+
+The first pre-test flagged 3 NOTEs, also resolved:
 
 * **"Possibly misspelled words in DESCRIPTION: subprocess"** — rephrased to
   "child R process" to avoid the false positive.
