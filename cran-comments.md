@@ -1,3 +1,19 @@
+## Resubmission
+
+This is a resubmission. The incoming pre-test on 2026-06-14 flagged 3 NOTEs,
+all now resolved:
+
+* **"Possibly misspelled words in DESCRIPTION: subprocess"** — rephrased to
+  "child R process" to avoid the false positive.
+
+* **"Non-standard files/directories found at top level: 'IDEAS.md'
+  'courieR_0.3.1_R_x86_64-pc-linux-gnu.tar.gz'"** — both paths added to
+  `.Rbuildignore`.
+
+* **"There are ::: calls to the package's namespace in its code:
+  '.build_issue_url'"** — changed `courieR:::.build_issue_url()` to a direct
+  same-package call `.build_issue_url()`.
+
 ## R CMD check results
 
 0 errors | 0 warnings | 0 notes

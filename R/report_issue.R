@@ -20,7 +20,47 @@
 #' }
 report_issue <- function(message = NULL, context = NULL) {
   msg <- message %||% "<!-- Describe the problem here -->"
-  url <- courieR:::.build_issue_url(msg, context)
+  url <- .build_issue_url(msg, context)
   utils::browseURL(url)
   invisible(url)
+}
+
+.build_issue_url <- function(message, context = NULL) {
+  pkg_ver  <- tryCatch(as.character(utils::packageVersion("courieR")), error = function(e) "unknown")
+  r_ver    <- paste0(R.version$major, ".", R.version$minor)
+  os_info  <- paste(Sys.info()[["sysname"]], Sys.info()[["release"]])
+  platform <- R.version$platform
+  n_routes <- tryCatch({
+    r <- find_routes()
+    sprintf("%d installation(s) detected", nrow(r))
+  }, error = function(e) "detection not run")
+
+  context_line <- if (!is.null(context) && nzchar(context))
+    paste0("**Context:** ", context, "\n\n")
+  else ""
+
+  body <- paste0(
+    "## Error report\n\n",
+    context_line,
+    "**Error:**\n```\n", message, "\n```\n\n",
+    "## Environment\n\n",
+    "| Field | Value |\n",
+    "|-------|-------|\n",
+    "| courieR | `", pkg_ver, "` |\n",
+    "| R | `", r_ver, "` |\n",
+    "| Platform | `", platform, "` |\n",
+    "| OS | `", os_info, "` |\n",
+    "| Routes | ", n_routes, " |\n\n",
+    "## Steps to reproduce\n\n",
+    "<!-- Describe what you were doing when the error occurred -->\n\n",
+    "1. \n2. \n3. \n"
+  )
+
+  title <- paste0("App error: ", strtrim(message, 70))
+  paste0(
+    "https://github.com/lennon-li/courieR/issues/new",
+    "?labels=bug",
+    "&title=", utils::URLencode(title, reserved = TRUE),
+    "&body=",  utils::URLencode(body,  reserved = TRUE)
+  )
 }

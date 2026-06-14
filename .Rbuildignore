@@ -19,3 +19,6 @@
 ^docs$
 ^\.superpowers$
 ^vignettes/figures/\.gitkeep$
+^IDEAS\.md$
+^courieR_.*\.tar\.gz$
+^internal$
