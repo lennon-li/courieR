@@ -2,6 +2,8 @@
 
 ## courieR 0.3.1
 
+CRAN release: 2026-06-14
+
 ### Bug fixes
 
 - Fixed a second cause of shipped packages never showing up as

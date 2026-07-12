@@ -50,7 +50,7 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.3.1" id="courier-031">courieR 0.3.1<a class="anchor" aria-label="anchor" href="#courier-031"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.3.1" id="courier-031">courieR 0.3.1<a class="anchor" aria-label="anchor" href="#courier-031"></a></h2><p class="text-muted">CRAN release: 2026-06-14</p>
 <div class="section level3">
 <h3 id="bug-fixes-0-3-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-3-1"></a></h3>
 <ul><li>Fixed a second cause of shipped packages never showing up as installed, on the <em>copy</em> path (offline/preserve modes and online mode’s local/private packages). A manifest’s <code>libpath</code> is the library directory shared by every package, but <code>.copy_plan()</code> passed it through as if it were the per-package source, so each “copy” recursively cloned the entire source library into <code>target/&lt;pkg&gt;/</code> — leaving no valid package where R looks and reporting a silent success. The package name is now joined onto the library path, which also restores the cross-major compiled-package warning (its <code>libs/</code> check was always false before). Covered by a <code>.copy_plan</code> + <code>copy_packages</code> regression test and an opt-in browser end-to-end test (<code>COURIER_E2E=true</code>).</li>
@@ -196,7 +196,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

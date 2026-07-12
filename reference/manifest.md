@@ -58,6 +58,6 @@ included in the output.
 #> 1:     pak  0.10.0       NA         NA         NA             NA         NA
 #>                            libpath  source
 #>                             <char>  <char>
-#> 1: /opt/R/4.6.0/lib/R/site-library unknown
+#> 1: /opt/R/4.6.1/lib/R/site-library unknown
 # }
 ```

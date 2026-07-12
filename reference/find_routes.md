@@ -114,7 +114,7 @@ are skipped with a warning rather than silently dropped.
 routes <- find_routes()
 routes[, c("version", "rscript_path", "is_current")]
 #>   version             rscript_path is_current
-#> 1   4.6.0 /opt/R/4.6.0/bin/Rscript      FALSE
+#> 1   4.6.1 /opt/R/4.6.1/bin/Rscript      FALSE
 
 # include a non-standard install
 routes <- find_routes(search_paths = "/opt/custom-r/bin/Rscript")
