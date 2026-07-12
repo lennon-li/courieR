@@ -186,32 +186,19 @@ mod_depot_ship_server <- function(id,
     ns <- session$ns
 
     # ── Reactive state ─────────────────────────────────────────────────────
-    # The checked rows ARE the shipment: input$ship_cb_rows holds 1-based row
-    # indices into visible_comp(). The "How to ship" dropdown (input$ship_mode)
-    # decides the mode applied to that checked set.
+    # The checked rows ARE the shipment: input$ship_cb_pkgs holds the package
+    # NAMES of the checked rows (not positional indices, so a filter change
+    # between render and the Ship click can't resolve against the wrong row).
+    # The "How to ship" dropdown (input$ship_mode) decides the mode applied to
+    # that checked set.
     ship_filter_status   <- reactiveVal("missing-from-target")
     depot_ship_result    <- reactiveVal(NULL)
     shipping_in_progress <- reactiveVal(FALSE)
     awaiting_refresh     <- reactiveVal(FALSE)
     depot_log <- reactiveVal(character(0))
-    # Mirrors mod_sync's add_sync_log: besides the reactiveVal (which cannot
-    # re-render while the synchronous ship loop blocks the event loop), each
-    # line is echoed to the R console via message() and pushed straight into
-    # the DOM with shinyjs::runjs so the log pane updates in real time.
+    depot_log_write <- make_log_appender(depot_log, ns("depot_log_pre"), max_lines = 1000L)
     depot_log_append <- function(...) {
-      msg <- paste0(...)
-      entry <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
-      depot_log(utils::tail(c(isolate(depot_log()), entry), 1000L))
-      message(entry)
-      try({
-        entry_json <- jsonlite::toJSON(entry, auto_unbox = TRUE)
-        shinyjs::runjs(sprintf(
-          "(function(){var el=document.getElementById('%s'); if(!el) return; var raw=%s; var s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); if(el.getAttribute('data-empty')==='true'){el.removeAttribute('data-empty');el.innerHTML=s;}else{el.innerHTML=s+(el.innerHTML?'\\n'+el.innerHTML:'');} el.scrollTop=0;})();",
-          ns("depot_log_pre"),
-          entry_json
-        ))
-      }, silent = TRUE)
-      invisible(NULL)
+      depot_log_write(paste0(...))
     }
 
     get_direction <- function() {
@@ -234,7 +221,7 @@ mod_depot_ship_server <- function(id,
     # Ship button reflects the checked-row count: disabled with 0 selected or
     # while a ship is running, and its label shows the count ("Ship 3 selected").
     observe({
-      n           <- length(input$ship_cb_rows)
+      n           <- length(input$ship_cb_pkgs)
       in_progress <- shipping_in_progress()
       enabled     <- !in_progress && n > 0L
       label       <- if (n > 0L) sprintf("Ship %d selected", n) else "Ship"
@@ -367,8 +354,13 @@ mod_depot_ship_server <- function(id,
         return(empty_ship_dt())
 
       pkgs <- visible[["package"]]
+      # data-pkg carries the package NAME rather than a positional row index:
+      # if the visible table re-filters between render and the Ship click, a
+      # stale row index would resolve against the wrong row (or go
+      # out-of-range); the package name always identifies the right row.
       cbs  <- vapply(seq_along(pkgs), function(i)
-        sprintf('<input type="checkbox" class="depot-ship-cb" data-rowidx="%d">', i),
+        sprintf('<input type="checkbox" class="depot-ship-cb" data-pkg="%s">',
+                htmltools::htmlEscape(pkgs[i])),
         character(1))
 
       repo_vals <- {
@@ -390,7 +382,7 @@ mod_depot_ship_server <- function(id,
         stringsAsFactors = FALSE
       )
 
-      cb_input <- ns("ship_cb_rows")
+      cb_input <- ns("ship_cb_pkgs")
 
       DT::datatable(
         display,
@@ -414,11 +406,11 @@ mod_depot_ship_server <- function(id,
                var tbl = settings.nTable;
                Shiny.setInputValue(inputId, null, {priority: "event"});
                $(tbl).off("change.cbsel").on("change.cbsel", ".depot-ship-cb", function() {
-                 var rows = [];
+                 var pkgs = [];
                  $(tbl).find(".depot-ship-cb:checked").each(function() {
-                   rows.push(parseInt($(this).attr("data-rowidx")));
+                   pkgs.push($(this).attr("data-pkg"));
                  });
-                 Shiny.setInputValue(inputId, rows.length ? rows : null, {priority: "event"});
+                 Shiny.setInputValue(inputId, pkgs.length ? pkgs : null, {priority: "event"});
                });
              }',
             cb_input
@@ -451,7 +443,7 @@ mod_depot_ship_server <- function(id,
           tags$span("Shipping in progress…")
         ))
       }
-      n    <- length(input$ship_cb_rows)
+      n    <- length(input$ship_cb_pkgs)
       mode <- input$ship_mode %||% "online"
       mode_label <- if (identical(mode, "ship")) "ship as-is" else "install online"
       if (n == 0L) {
@@ -464,7 +456,7 @@ mod_depot_ship_server <- function(id,
       # rates (every completed ship updates them).
       est_text <- tryCatch({
         visible <- visible_comp()
-        sel     <- visible[["package"]][input$ship_cb_rows]
+        sel     <- intersect(input$ship_cb_pkgs, visible[["package"]])
         dir     <- get_direction()
         repo_col <- if (identical(dir, "target_to_source")) "repo_in_target" else "repo_in_source"
         repo <- if (!is.null(visible) && repo_col %in% names(visible)) {
@@ -498,13 +490,12 @@ mod_depot_ship_server <- function(id,
     observeEvent(input$depot_ship_btn, {
       if (isTRUE(shipping_in_progress())) return()
 
-      comp    <- isolate(get_comp())
-      visible <- isolate(visible_comp())
-      sel_idx <- isolate(input$ship_cb_rows)
-      mode    <- isolate(input$ship_mode) %||% "online"
-      from    <- if (is.function(from_r_path)) isolate(from_r_path()) else NULL
-      to      <- if (is.function(to_r_path))   isolate(to_r_path())   else NULL
-      dir     <- isolate(get_direction())
+      comp     <- isolate(get_comp())
+      sel_pkgs <- isolate(input$ship_cb_pkgs)
+      mode     <- isolate(input$ship_mode) %||% "online"
+      from     <- if (is.function(from_r_path)) isolate(from_r_path()) else NULL
+      to       <- if (is.function(to_r_path))   isolate(to_r_path())   else NULL
+      dir      <- isolate(get_direction())
 
       if (is.null(comp) || is.null(from) || is.null(to)) {
         showNotification("Run Compare in Dispatch first, then return here to ship.",
@@ -512,15 +503,18 @@ mod_depot_ship_server <- function(id,
         return()
       }
 
-      if (is.null(sel_idx) || length(sel_idx) == 0L || is.null(visible)) {
+      if (is.null(sel_pkgs) || length(sel_pkgs) == 0L) {
         showNotification("Check at least one package to ship.", type = "warning")
         return()
       }
 
-      # The checked rows are the shipment. Build the per-package action vector
-      # ship() expects: selected packages get the chosen mode, everything else
-      # is skipped. Batch routing (direction, online vs offline) is unchanged.
-      selected_pkgs        <- visible[["package"]][sel_idx]
+      # The checked packages are the shipment (by name, not row position — the
+      # visible table may have re-filtered since these were checked). Build
+      # the per-package action vector ship() expects: selected packages get
+      # the chosen mode, everything else is skipped. Batch routing (direction,
+      # online vs offline) is unchanged. Defensively drop any checked name
+      # that's no longer in the current comparison.
+      selected_pkgs        <- intersect(sel_pkgs, comp[["package"]])
       actions              <- rep("skip", nrow(comp))
       names(actions)       <- comp[["package"]]
       actions[selected_pkgs] <- mode
@@ -571,39 +565,21 @@ mod_depot_ship_server <- function(id,
       })
       depot_log_append(sprintf("Estimated time: %s (calibrates from each completed ship).", est$text))
 
-      hero_js <- function(fn, arg = NULL) {
-        arg_js <- if (is.null(arg)) "" else jsonlite::toJSON(arg, auto_unbox = TRUE)
-        try(shinyjs::runjs(sprintf(
-          "if(window.courierDepotHero) window.courierDepotHero.%s(%s);", fn, arg_js
-        )), silent = TRUE)
-      }
+      hero_js <- make_hero_js("courierDepotHero")
       try(shinyjs::runjs(sprintf(
         "if(window.courierDepotHero) window.courierDepotHero.start(%d, %s);",
         total, jsonlite::toJSON(est$text, auto_unbox = TRUE)
       )), silent = TRUE)
 
-      delivered <- 0L
-      ship_log_cb <- function(msg) {
-        depot_log_append(msg)
-        m <- regmatches(msg, regexec("^\\[(\\d+)/(\\d+)\\] (\\S+) - copying", msg))[[1]]
-        if (length(m) == 4L) {
-          hero_js("status", sprintf("Copying %s (%s/%s) ...", m[[4]], m[[2]], m[[3]]))
-          return(invisible(NULL))
-        }
-        m <- regmatches(msg, regexec("^\\[ok\\] (\\S+) - copied", msg))[[1]]
-        if (length(m) == 2L) {
-          delivered <<- delivered + 1L
-          hero_js("count", delivered)
-          hero_js("status", sprintf("%s delivered", m[[2]]))
-          return(invisible(NULL))
-        }
-        if (grepl("^Reinstalling \\d+ package", msg)) {
-          hero_js("status", "Installing online via pak - live output in the R console ...")
-        } else if (grepl("^pak subprocess finished successfully", msg)) {
-          hero_js("status", "pak install finished; verifying target library ...")
-        }
-        invisible(NULL)
-      }
+      ship_log_cb <- make_ship_log_cb(
+        depot_log_append, hero_js,
+        labels = list(
+          copying    = "Copying %s (%s/%s) ...",
+          delivered  = "%s delivered",
+          installing = "Installing online via pak - live output in the R console ...",
+          pak_done   = "pak install finished; verifying target library ..."
+        )
+      )
 
       showNotification(
         sprintf("Shipping %d package(s)… watch the R console for real-time progress.", total),
@@ -652,6 +628,10 @@ mod_depot_ship_server <- function(id,
       ok <- tryCatch({
         for (i in seq_along(batches)) {
           b <- batches[[i]]
+          # Guarantee the target's cached scan is dropped even if ship() throws
+          # mid-batch, so a crash doesn't leave already-delivered packages
+          # showing "missing from target" until a manual re-Compare.
+          on.exit(invalidate_scan(b$tgt), add = TRUE)
           batch_t0 <- Sys.time()
           res <- courieR::ship(
             source_path  = b$src,
@@ -667,7 +647,6 @@ mod_depot_ship_server <- function(id,
             source_pkgs  = get_scan(b$src),
             target_pkgs  = get_scan(b$tgt)
           )
-          invalidate_scan(b$tgt)
           # Calibrate the per-package time estimate from what really happened
           # on this machine (offline/preserve batches are pure copies; online
           # batches are predominantly pak installs).
@@ -762,15 +741,6 @@ mod_depot_ship_server <- function(id,
     })
 
     # ── Log pane (mirrors Bulk Dispatch) ───────────────────────────────────
-    format_depot_log <- function(entry) {
-      if (startsWith(entry, "[ERR] ")) {
-        clean <- htmltools::htmlEscape(substr(entry, 7L, nchar(entry)))
-        sprintf('<span class="sync-log-error">%s</span>', clean)
-      } else {
-        htmltools::htmlEscape(entry)
-      }
-    }
-
     output$depot_log_ui <- renderUI({
       entries <- depot_log()
       active  <- shipping_in_progress()
@@ -833,7 +803,7 @@ mod_depot_ship_server <- function(id,
             empty_text
           } else {
             HTML(paste(
-              vapply(rev(utils::tail(entries, 250)), format_depot_log, character(1)),
+              vapply(rev(utils::tail(entries, 250)), format_courier_log_entry, character(1)),
               collapse = "\n"
             ))
           }

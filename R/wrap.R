@@ -12,7 +12,12 @@
 #' wrap("r-lib/rlang", source_hint = "GitHub", github_ref = "r-lib/rlang")
 #' @export
 wrap <- function(package, version = NULL, source_hint = NULL, github_ref = NULL) {
-  if (!is.null(source_hint) && source_hint == "local" && !is.null(version) && file.exists(version)) {
+  # Require a path separator before checking file.exists(): source_hint ==
+  # "local" callers pass a directory/archive path, but a bare version string
+  # (e.g. "1.0.0") could coincidentally name a file left in the working
+  # directory, silently flipping it into a local:: spec.
+  if (!is.null(source_hint) && source_hint == "local" && !is.null(version) &&
+      grepl("[/\\\\]", version) && file.exists(version)) {
     return(paste0("local::", version))
   }
 

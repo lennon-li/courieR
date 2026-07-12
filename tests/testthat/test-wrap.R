@@ -22,6 +22,17 @@ test_that("wrap generates local spec", {
   expect_equal(wrap("pkg", version = tmp, source_hint = "local"), paste0("local::", tmp))
 })
 
+test_that("wrap does not resolve a bare version string as a local path just because a same-named file exists (A9)", {
+  skip_on_cran()
+  # local_dir() (not just local_tempdir()) - local_tempdir() alone does NOT
+  # change the working directory, so the stray "1.0.0" file below would
+  # otherwise land directly in tests/testthat/.
+  withr::local_dir(withr::local_tempdir())
+  # A stray file that happens to share its name with the version string.
+  writeLines("", "1.0.0")
+  expect_equal(wrap("pkg", version = "1.0.0", source_hint = "local"), "pkg@1.0.0")
+})
+
 test_that("wrap returns package name for invalid version string", {
   expect_equal(wrap("pkg", version = ">= 1.0"), "pkg")
 })

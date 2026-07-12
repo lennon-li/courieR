@@ -54,9 +54,12 @@ parse_inspection_log <- function(log_path) {
     }
     msg   <- paste(detail, collapse = "\n")
 
+    # Anchored to source-file extensions so a host:port in check output
+    # (e.g. "127.0.0.1:8080", "example.com:443") isn't mistaken for a
+    # file:line reference.
     fl_match <- regmatches(
       msg,
-      regexpr("[A-Za-z0-9._-]+\\.[A-Za-z0-9]+:(\\d+)", msg)
+      regexpr("[A-Za-z0-9._-]+\\.(R|r|Rd|Rmd|qmd|c|cpp|h):(\\d+)", msg)
     )
 
     if (length(fl_match) > 0L && nchar(fl_match) > 0L) {

@@ -9,13 +9,20 @@ find_target_lib <- function(target_path) {
   # that manifest() scans. With --vanilla + inherited env, .libPaths()[1] was
   # the parent's R_LIBS_USER - ship() then installed into a library that
   # Compare never looks at, so shipped packages stayed "not installed".
+  # Sentinel-delimited output (matching find_routes()'s probe): a target
+  # .Rprofile/.Renviron that writes to stdout (cat/print) would otherwise be
+  # concatenated onto .libPaths()[1L] and corrupt the parsed path.
   res <- processx::run(
     target_path,
-    c("--no-save", "-e", "cat(.libPaths()[1L])"),
+    c("--no-save", "-e", 'cat("||LIB||", .libPaths()[1L], "||LIB||", sep = "")'),
     env = child_r_env(),
     error_on_status = FALSE
   )
-  out <- trimws(res$stdout)
+  m <- regmatches(
+    trimws(res$stdout),
+    regexec("\\|\\|LIB\\|\\|(.*)\\|\\|LIB\\|\\|", trimws(res$stdout))
+  )[[1]]
+  out <- if (length(m) >= 2) trimws(m[2]) else ""
   if (res$status != 0 || !nzchar(out)) {
     cli::cli_abort(
       "Could not determine target library path (exit {res$status}). stderr: {res$stderr}",

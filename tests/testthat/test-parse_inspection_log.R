@@ -59,6 +59,21 @@ test_that("parse_inspection_log returns empty data.table for log with no issues"
   expect_equal(nrow(res), 0L)
 })
 
+test_that("parse_inspection_log does not mistake host:port for file:line (A8)", {
+  tmp <- withr::local_tempfile(lines = c(
+    "* checking examples ... WARNING",
+    "  trying URL 'http://127.0.0.1:8080/' failed",
+    "  Package example calls example.com:443 during a live test",
+    "  see R/foo.R:12 for the actual offending call"
+  ), fileext = ".log")
+
+  res <- parse_inspection_log(tmp)
+  expect_equal(nrow(res), 1L)
+  # Must resolve to the real source reference, not the host:port strings.
+  expect_equal(res$file, "foo.R")
+  expect_equal(res$line, "12")
+})
+
 test_that("parse_inspection_log extracts file.R patterns", {
   tmp <- withr::local_tempfile(lines = c(
     "* checking tests ... ERROR",

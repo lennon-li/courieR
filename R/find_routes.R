@@ -147,8 +147,13 @@ find_routes <- function(search_paths = NULL) {
       candidates <- c(candidates, windows_rscript_paths(docs_dirs))
     }
   } else if (Sys.info()["sysname"] == "Darwin") {
-    dirs <- fs::dir_ls("/Library/Frameworks/R.framework/Versions", type = "directory", fail = FALSE)
-    candidates <- c(candidates, fs::path(dirs, "Resources", "bin", "Rscript"))
+    # fs::dir_ls(fail = FALSE) still *warns* (not just returns empty) when the
+    # directory doesn't exist; guard with dir_exists() like the user-local
+    # and rig branches below already do.
+    if (fs::dir_exists("/Library/Frameworks/R.framework/Versions")) {
+      dirs <- fs::dir_ls("/Library/Frameworks/R.framework/Versions", type = "directory", fail = FALSE)
+      candidates <- c(candidates, fs::path(dirs, "Resources", "bin", "Rscript"))
+    }
 
     # User-local framework install (no admin required)
     user_fw <- fs::path(path.expand("~"), "Library", "Frameworks", "R.framework", "Versions")
@@ -162,8 +167,10 @@ find_routes <- function(search_paths = NULL) {
       candidates <- c(candidates, fs::path(brew_prefix, "opt", "r", "bin", "Rscript"))
     }
   } else {
-    dirs <- fs::dir_ls("/opt/R", type = "directory", fail = FALSE)
-    candidates <- c(candidates, fs::path(dirs, "bin", "Rscript"))
+    if (fs::dir_exists("/opt/R")) {
+      dirs <- fs::dir_ls("/opt/R", type = "directory", fail = FALSE)
+      candidates <- c(candidates, fs::path(dirs, "bin", "Rscript"))
+    }
     candidates <- c(candidates, "/usr/lib/R/bin/Rscript")
 
     # User-local rig installs (~/.local/share/rig/R/)
@@ -236,7 +243,7 @@ find_routes <- function(search_paths = NULL) {
   #     not see the parent's R_HOME and emit "WARNING: ignoring environment
   #     value of R_HOME" on stdout, which would corrupt the parsed output.
   probe_env <- Sys.getenv()
-  probe_env <- probe_env[!names(probe_env) %in% c("R_LIBS_USER", "R_LIBS_SITE", "R_LIBS")]
+  probe_env <- probe_env[!toupper(names(probe_env)) %in% c("R_LIBS_USER", "R_LIBS_SITE", "R_LIBS")]
   probe_env["R_HOME"] <- ""
 
   # Probe timeout: generous by default because on slow machines (antivirus,

@@ -35,7 +35,10 @@ take_inventory <- function(project_path) {
           deps <- rbind(deps, desc_res, fill = TRUE)
         }
       }
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      cli::cli_warn("Could not parse {.file {desc_path}}: {e$message}")
+      NULL
+    })
   }
 
   renv_path <- fs::path(project_path, "renv.lock")
@@ -69,7 +72,10 @@ take_inventory <- function(project_path) {
           deps <- renv_dt
         }
       }
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      cli::cli_warn("Could not parse {.file {renv_path}}: {e$message}")
+      NULL
+    })
   }
 
   if (nrow(deps) == 0) {

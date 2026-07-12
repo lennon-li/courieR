@@ -9,7 +9,7 @@ mod_error_reporter_server <- function(id, error_rv) {
       err <- error_rv()
       if (is.null(err)) return()
 
-      issue_url <- .build_issue_url(err$message, err$context)
+      issue_url <- courieR:::.build_issue_url(err$message, err$context)
 
       showModal(modalDialog(
         title = tagList(

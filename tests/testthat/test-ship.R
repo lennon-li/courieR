@@ -377,6 +377,23 @@ test_that("find_target_lib ignores the parent session's R_LIBS_USER", {
                          normalizePath(decoy, mustWork = FALSE)))
 })
 
+test_that("find_target_lib survives stray stdout output from a target .Rprofile", {
+  # A target-side .Rprofile that cat()s/print()s (a real thing users do) writes
+  # to stdout before our probe script runs. Un-delimited parsing would
+  # concatenate that noise onto .libPaths()[1L] and corrupt the path; the
+  # sentinel-delimited parser must still extract just the library path.
+  rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  skip_if_not(file.exists(rscript), "Rscript not found")
+
+  profile <- withr::local_tempfile(fileext = ".R")
+  writeLines('cat("stray noise from .Rprofile\\n")', profile)
+  withr::local_envvar(R_PROFILE_USER = profile)
+
+  lib <- find_target_lib(rscript)
+  expect_false(grepl("stray noise", lib))
+  expect_true(nzchar(lib))
+})
+
 test_that("find_target_lib resolves the same library that manifest() scans", {
   # ship() writes into find_target_lib(); Compare reads manifest(). If the two
   # resolve different libraries, shipped packages are invisible to Compare.

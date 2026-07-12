@@ -249,36 +249,14 @@ mod_sync_server <- function(id,
       sprintf("<span class='sync-status sync-status-%s'>%s</span>", status_class, label)
     }
 
+    sync_log_write <- make_log_appender(sync_log, ns("sync_log_pre"))
+
     add_sync_log <- function(...) {
-      msg <- paste(..., collapse = "")
-      entry <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
-      sync_log(c(isolate(sync_log()), entry))
-      message(entry)
-      try({
-        entry_json <- jsonlite::toJSON(entry, auto_unbox = TRUE)
-        shinyjs::runjs(sprintf(
-          "(function(){var el=document.getElementById('%s'); if(!el) return; var raw=%s; var s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); if(el.getAttribute('data-empty')==='true'){el.removeAttribute('data-empty');el.innerHTML=s;}else{el.innerHTML=s+(el.innerHTML?'\\n'+el.innerHTML:'');} el.scrollTop=0;})();",
-          ns("sync_log_pre"),
-          entry_json
-        ))
-      }, silent = TRUE)
-      invisible(NULL)
+      sync_log_write(paste(..., collapse = ""))
     }
 
     add_sync_log_error <- function(...) {
-      msg <- paste(..., collapse = "")
-      display <- sprintf("%s  %s", format(Sys.time(), "%H:%M:%S"), msg)
-      sync_log(c(isolate(sync_log()), paste0("[ERR] ", display)))
-      message("[ERR] ", display)
-      try({
-        display_json <- jsonlite::toJSON(display, auto_unbox = TRUE)
-        shinyjs::runjs(sprintf(
-          "(function(){var el=document.getElementById('%s'); if(!el) return; var raw=%s; var s=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); var span='<span class=\"sync-log-error\">'+s+'</span>'; if(el.getAttribute('data-empty')==='true'){el.removeAttribute('data-empty');el.innerHTML=span;}else{el.innerHTML=span+(el.innerHTML?'\\n'+el.innerHTML:'');} el.scrollTop=0;})();",
-          ns("sync_log_pre"),
-          display_json
-        ))
-      }, silent = TRUE)
-      invisible(NULL)
+      sync_log_write(paste(..., collapse = ""), live_error = TRUE)
     }
 
     set_sync_progress <- function(pct = NULL, step = NULL, active = TRUE) {
@@ -861,15 +839,6 @@ mod_sync_server <- function(id,
       )
     })
 
-    format_log_entry <- function(entry) {
-      if (startsWith(entry, "[ERR] ")) {
-        clean <- htmltools::htmlEscape(substr(entry, 7L, nchar(entry)))
-        sprintf('<span class="sync-log-error">%s</span>', clean)
-      } else {
-        htmltools::htmlEscape(entry)
-      }
-    }
-
     output$sync_log <- renderUI({
       entries <- sync_log()
       active <- sync_active()
@@ -916,7 +885,7 @@ mod_sync_server <- function(id,
             empty_text
           } else {
             HTML(paste(
-              vapply(rev(utils::tail(entries, 250)), format_log_entry, character(1)),
+              vapply(rev(utils::tail(entries, 250)), format_courier_log_entry, character(1)),
               collapse = "\n"
             ))
           }
@@ -1538,34 +1507,16 @@ mod_sync_server <- function(id,
       ship_start_time <- Sys.time()
 
       # Hero panel helpers (live "X/Y delivered" panel in the log pane).
-      hero_js <- function(fn, arg = NULL) {
-        arg_js <- if (is.null(arg)) "" else jsonlite::toJSON(arg, auto_unbox = TRUE)
-        try(shinyjs::runjs(sprintf(
-          "if(window.courierBulkHero) window.courierBulkHero.%s(%s);", fn, arg_js
-        )), silent = TRUE)
-      }
-      bulk_delivered <- 0L
-      bulk_ship_log_cb <- function(...) {
-        add_sync_log(...)
-        msg <- paste0(...)
-        m <- regmatches(msg, regexec("^\\[(\\d+)/(\\d+)\\] (\\S+) - copying", msg))[[1]]
-        if (length(m) == 4L) {
-          hero_js("status", sprintf("Copying %s (%s/%s)…", m[[4]], m[[2]], m[[3]]))
-          return(invisible(NULL))
-        }
-        m2 <- regmatches(msg, regexec("^\\[ok\\] (\\S+) - copied", msg))[[1]]
-        if (length(m2) == 2L) {
-          bulk_delivered <<- bulk_delivered + 1L
-          hero_js("count", bulk_delivered)
-          hero_js("status", sprintf("%s delivered", m2[[2]]))
-          return(invisible(NULL))
-        }
-        if (grepl("^Reinstalling \\d+ package", msg))
-          hero_js("status", "Installing via pak — live output in R console…")
-        else if (grepl("^pak subprocess finished successfully", msg))
-          hero_js("status", "pak finished; verifying target library…")
-        invisible(NULL)
-      }
+      hero_js <- make_hero_js("courierBulkHero")
+      bulk_ship_log_cb <- make_ship_log_cb(
+        add_sync_log, hero_js,
+        labels = list(
+          copying    = "Copying %s (%s/%s)…",
+          delivered  = "%s delivered",
+          installing = "Installing via pak — live output in R console…",
+          pak_done   = "pak finished; verifying target library…"
+        )
+      )
 
       result <- tryCatch({
         set_sync_progress(5, "Preparing sync plan", active = TRUE)
@@ -1593,6 +1544,10 @@ mod_sync_server <- function(id,
 
         for (i in seq_along(batches)) {
           batch <- batches[[i]]
+          # Guarantee the target's cached scan is dropped even if ship() throws
+          # mid-batch, so a crash doesn't leave already-delivered packages
+          # showing "missing from target" until a manual re-Compare.
+          on.exit(invalidate_manifest(batch$target_path), add = TRUE)
           package_preview <- paste(utils::head(batch$packages, 8), collapse = ", ")
           if (length(batch$packages) > 8) {
             package_preview <- paste0(package_preview, sprintf(", and %d more", length(batch$packages) - 8))
@@ -1624,10 +1579,6 @@ mod_sync_server <- function(id,
             source_pkgs = get_manifest(batch$source_path),
             target_pkgs = get_manifest(batch$target_path)
           )
-          # The target library changed — drop its cached scan so the post-sync
-          # comparison re-scans it fresh.
-          invalidate_manifest(batch$target_path)
-
           add_plan_log(ship_result)
           add_result_log(ship_result)
 
@@ -1725,6 +1676,7 @@ mod_sync_server <- function(id,
         add_sync_log("Post-sync comparison refreshed: ", comparison_counts_text(comp_after), ".")
         list(count = total_count, failed = failed_count, remaining = remaining)
       }, error = function(e) {
+        hero_js("stop")
         set_sync_progress(0, "Ship failed", active = FALSE)
         add_sync_log("Ship failed: ", e$message)
         showNotification(paste("Ship failed:", e$message), type = "error", duration = NULL)

@@ -31,6 +31,18 @@ test_that("migrate errors on unknown version", {
   )
 })
 
+test_that("migrate rejects NA, non-character, and empty from/to with a clear error", {
+  skip_on_cran()
+  err_na <- tryCatch(migrate(NA, "4.5.2"), error = function(e) e)
+  expect_match(conditionMessage(err_na), "non-empty, non-NA", ignore.case = TRUE)
+
+  err_num <- tryCatch(migrate(4.5, "4.5.2"), error = function(e) e)
+  expect_match(conditionMessage(err_num), "non-empty, non-NA", ignore.case = TRUE)
+
+  err_empty <- tryCatch(migrate("", "4.5.2"), error = function(e) e)
+  expect_match(conditionMessage(err_empty), "non-empty, non-NA", ignore.case = TRUE)
+})
+
 test_that("migrate errors when from and to resolve to the same installation", {
   skip_on_cran()
   routes <- find_routes()

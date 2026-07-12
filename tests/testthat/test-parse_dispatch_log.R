@@ -42,6 +42,24 @@ test_that("parse_dispatch_log parses failure, success, and skip entries", {
   expect_match(res$message[4], "unexpected error")
 })
 
+test_that("parse_dispatch_log parses a CRLF log (trailing \\r kept off the header anchor)", {
+  tmp <- withr::local_tempfile(fileext = ".log")
+  crlf_lines <- c(
+    "-- Failure (test-foo.R:12): addition works ----",
+    "`actual` not equal to `expected`.",
+    "-- Success (test-bar.R:5): multiplication works ----",
+    ""
+  )
+  con <- file(tmp, open = "wb")
+  writeLines(crlf_lines, con, sep = "\r\n")
+  close(con)
+
+  res <- parse_dispatch_log(tmp)
+  expect_equal(nrow(res), 2L)
+  expect_equal(res$file,   c("test-foo.R", "test-bar.R"))
+  expect_equal(res$status, c("failure", "success"))
+})
+
 test_that("parse_dispatch_log returns empty data.table for log with no entries", {
   tmp <- withr::local_tempfile(lines = c(
     "Loading courieR",

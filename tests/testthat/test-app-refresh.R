@@ -6,6 +6,10 @@ mod_path <- testthat::test_path("..", "..", "inst", "app", "modules", "mod_sync.
 if (!file.exists(mod_path)) {
   mod_path <- system.file("app/modules/mod_sync.R", package = "courieR")
 }
+helpers_path <- testthat::test_path("..", "..", "inst", "app", "modules", "app_helpers.R")
+if (!file.exists(helpers_path)) {
+  helpers_path <- system.file("app/modules/app_helpers.R", package = "courieR")
+}
 
 test_that("refresh_request refreshes the comparison and reuses cached scans", {
   skip_on_cran()
@@ -19,6 +23,7 @@ test_that("refresh_request refreshes the comparison and reuses cached scans", {
 
   library(shiny)
   `%||%` <- function(a, b) if (is.null(a)) b else a
+  source(helpers_path, local = TRUE)
   source(mod_path, local = TRUE)
 
   # Shared scan cache mirroring server.R, instrumented to count real scans.

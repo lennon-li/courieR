@@ -23,7 +23,10 @@ rig_list <- function() {
   if (res$status != 0) return(data.frame())
   
   lines <- strsplit(res$stdout, "\n")[[1]]
-  versions <- grep("^[0-9]+\\.[0-9]+", lines, value = TRUE)
+  # `rig list` marks the active/default version with a leading "* "; without
+  # allowing that prefix, grep would drop the active install from the result.
+  versions <- grep("^[*[:space:]]*[0-9]+\\.[0-9]+", lines, value = TRUE)
+  versions <- sub("^\\*\\s*", "", versions)
   data.frame(version = trimws(versions), stringsAsFactors = FALSE)
 }
 

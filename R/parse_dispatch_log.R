@@ -24,6 +24,10 @@ parse_dispatch_log <- function(log_path) {
   }
 
   lines <- readLines(log_path, warn = FALSE)
+  # A CRLF log can leave a trailing "\r" on each line (platform-dependent);
+  # left as-is, the header regex's "----$" anchor would never match and the
+  # log would silently parse as having zero results.
+  lines <- sub("\r$", "", lines)
   if (length(lines) == 0L || all(nchar(trimws(lines)) == 0L)) {
     return(empty_dt)
   }

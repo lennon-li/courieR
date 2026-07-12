@@ -37,6 +37,9 @@ migrate <- function(from, to, dry_run = FALSE, upgrade = TRUE, mode = "online", 
   }
 
   resolve <- function(x, label) {
+    if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
+      cli::cli_abort("{label} must be a non-empty, non-NA character string (a version like {.val 4.5.2} or an Rscript path), not {.val {x}}.")
+    }
     hit <- routes[
       routes$version == x |
       startsWith(routes$version, paste0(x, ".")) |

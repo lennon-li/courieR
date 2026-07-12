@@ -14,7 +14,7 @@
 child_r_env <- function() {
   cur  <- Sys.getenv()
   nm   <- names(cur)
-  keep <- !(nm %in% c("R_LIBS_USER", "R_LIBS", "R_LIBS_SITE", "R_HOME"))
+  keep <- !(toupper(nm) %in% c("R_LIBS_USER", "R_LIBS", "R_LIBS_SITE", "R_HOME"))
   c(stats::setNames(as.character(cur)[keep], nm[keep]), R_HOME = "")
 }
 

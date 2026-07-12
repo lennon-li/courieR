@@ -21,7 +21,10 @@ inspect_shipment <- function(project_path) {
     tryCatch({
       d <- desc::desc(fs::path(project_path, "DESCRIPTION"))
       if (nzchar(d$get("Package")[[1]])) is_package <- TRUE
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      cli::cli_warn("Could not parse DESCRIPTION in {.file {project_path}}: {e$message}")
+      NULL
+    })
   }
 
   r_files <- as.character(fs::dir_ls(project_path, glob = "*.[Rr]", recurse = TRUE, type = "file"))
